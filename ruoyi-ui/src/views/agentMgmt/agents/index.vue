@@ -72,7 +72,7 @@
       <el-empty v-else description="暂无 Agent，点击右上角新增" />
     </div>
 
-    <el-dialog :visible.sync="dialogVisible" width="1040px" class="am-dialog wizard-dialog" :show-close="false">
+    <el-dialog :visible.sync="dialogVisible" width="1080px" class="am-dialog wizard-dialog" :show-close="false">
       <div class="wizard-shell">
         <div class="wizard-topbar">
           <div>
@@ -578,8 +578,11 @@ export default {
   font-size: 12px;
 }
 .wizard-dialog ::v-deep .el-dialog {
+  max-width: calc(100vw - 48px);
+  margin-top: 7vh !important;
   border-radius: 8px;
   overflow: hidden;
+  box-shadow: 0 18px 48px rgba(15, 23, 42, .18);
 }
 .wizard-dialog ::v-deep .el-dialog__header,
 .wizard-dialog ::v-deep .el-dialog__footer {
@@ -591,12 +594,15 @@ export default {
 .wizard-shell {
   display: flex;
   flex-direction: column;
-  max-height: 82vh;
+  height: 78vh;
+  min-height: 620px;
+  max-height: 820px;
   background: var(--am-bg);
 }
 .wizard-topbar {
-  min-height: 48px;
-  padding: 10px 20px;
+  flex: 0 0 auto;
+  min-height: 52px;
+  padding: 11px 18px;
   border-bottom: 1px solid var(--am-border);
   display: flex;
   align-items: center;
@@ -604,11 +610,15 @@ export default {
   gap: 12px;
 }
 .wizard-title {
-  font-size: 14px;
+  display: block;
+  font-size: 15px;
   font-weight: 600;
+  line-height: 1.35;
 }
 .wizard-sub {
-  margin-left: 8px;
+  display: block;
+  margin-top: 2px;
+  margin-left: 0;
   font-size: 11px;
   color: var(--am-text2);
 }
@@ -626,9 +636,10 @@ export default {
   background: var(--am-bg2);
 }
 .wizard-steps {
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
-  padding: 12px 20px;
+  padding: 10px 18px;
   border-bottom: 1px solid var(--am-border);
   background: var(--am-bg);
 }
@@ -674,22 +685,25 @@ export default {
 }
 .wizard-split {
   display: grid;
-  grid-template-columns: 300px minmax(0, 1fr);
-  min-height: 500px;
+  grid-template-columns: minmax(340px, 400px) minmax(0, 1fr);
+  flex: 1 1 auto;
+  min-height: 0;
   overflow: hidden;
 }
 .wizard-left {
-  padding: 20px;
+  padding: 16px 18px;
   border-right: 1px solid var(--am-border);
   overflow-y: auto;
+  background: #fff;
 }
 .wizard-right {
-  padding: 20px;
+  padding: 16px 18px;
   background: var(--am-bg2);
   overflow: auto;
 }
 .wizard-foot {
-  padding: 12px 20px;
+  flex: 0 0 auto;
+  padding: 10px 18px;
   border-top: 1px solid var(--am-border);
   display: flex;
   justify-content: flex-end;
@@ -698,13 +712,14 @@ export default {
 }
 .type-row {
   display: flex;
-  gap: 6px;
-  margin-bottom: 14px;
+  gap: 8px;
+  margin-bottom: 12px;
 }
 .type-btn {
   flex: 1;
-  padding: 8px;
-  border: 1.5px solid var(--am-border2);
+  min-height: 64px;
+  padding: 8px 10px;
+  border: 1px solid var(--am-border2);
   border-radius: 6px;
   background: var(--am-bg);
   color: var(--am-text2);
@@ -741,9 +756,10 @@ export default {
   color: var(--am-text2);
 }
 .yaml-block {
-  min-height: 390px;
+  height: calc(100% - 20px);
+  min-height: 0;
   margin: 0;
-  padding: 14px 16px;
+  padding: 12px 14px;
   border: 1px solid var(--am-border);
   border-radius: 8px;
   background: var(--am-bg);
@@ -755,12 +771,19 @@ export default {
   overflow-x: auto;
 }
 .fr {
-  margin-bottom: 14px;
+  float: none !important;
+  clear: both;
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin-bottom: 12px;
 }
 .fr:last-child {
   margin-bottom: 0;
 }
 label.fl {
+  float: none !important;
+  clear: both;
   display: block;
   margin-bottom: 4px;
   color: var(--am-text2);
@@ -784,13 +807,15 @@ label.fl {
 }
 .divider {
   height: 1px;
-  margin: 16px 0;
+  margin: 14px 0;
   background: var(--am-border);
 }
 .wizard-left input,
 .wizard-left textarea {
+  display: block;
+  clear: both;
   width: 100%;
-  padding: 7px 9px;
+  padding: 8px 10px;
   border: 1px solid var(--am-border2);
   border-radius: 6px;
   outline: none;
@@ -806,7 +831,7 @@ label.fl {
   border-color: var(--am-primary);
 }
 .wizard-left textarea {
-  min-height: 230px;
+  min-height: 260px;
   resize: vertical;
   font-family: Consolas, Monaco, monospace;
   font-size: 11px;
@@ -894,6 +919,15 @@ label.fl {
   color: var(--am-text2);
 }
 @media (max-width: 768px) {
+  .wizard-dialog ::v-deep .el-dialog {
+    max-width: calc(100vw - 24px);
+    margin-top: 4vh !important;
+  }
+  .wizard-shell {
+    height: auto;
+    min-height: 0;
+    max-height: 90vh;
+  }
   .am-topbar {
     align-items: flex-start;
     flex-direction: column;
@@ -903,10 +937,17 @@ label.fl {
   }
   .wizard-split {
     grid-template-columns: 1fr;
+    overflow-y: auto;
   }
   .wizard-left {
     border-right: 0;
     border-bottom: 1px solid var(--am-border);
+  }
+  .wizard-right {
+    min-height: 260px;
+  }
+  .yaml-block {
+    min-height: 240px;
   }
 }
 </style>

@@ -11,7 +11,22 @@
     <div class="log-filterbar">
       <label>
         <span>场景</span>
-        <el-input v-model="query.scenario_name" size="mini" clearable placeholder="场景名" @keyup.enter.native="search" />
+        <el-select
+          v-model="query.scenario_name"
+          size="mini"
+          clearable
+          filterable
+          :loading="scenarioLoading"
+          placeholder="请选择场景"
+          @change="search"
+        >
+          <el-option
+            v-for="scenario in scenarioOptions"
+            :key="scenario.id || scenario.scenario_name"
+            :label="scenario.scenario_name"
+            :value="scenario.scenario_name"
+          />
+        </el-select>
       </label>
       <label>
         <span>系统</span>
@@ -59,22 +74,34 @@
 </template>
 
 <script>
-import { listLogs, logHtmlUrl } from '@/api/agentMgmt'
+import { getLogHtml, listLogs, listScenarios } from '@/api/agentMgmt'
 
 export default {
   name: 'AgentMgmtLogs',
   data() {
     return {
       loading: false,
+      scenarioLoading: false,
+      scenarioOptions: [],
       rows: [],
       total: 0,
       query: { page: 1, page_size: 20, scenario_name: '', system_id: '', alert_key: '' }
     }
   },
   created() {
+    this.loadScenarioOptions()
     this.getList()
   },
   methods: {
+    async loadScenarioOptions() {
+      this.scenarioLoading = true
+      try {
+        const data = await listScenarios({ scope: 'all' })
+        this.scenarioOptions = Array.isArray(data) ? data : []
+      } finally {
+        this.scenarioLoading = false
+      }
+    },
     async getList() {
       this.loading = true
       try {
@@ -100,8 +127,27 @@ export default {
         return {}
       }
     },
-    openHtml(row) {
-      window.open(logHtmlUrl(row.id), '_blank')
+    async openHtml(row) {
+      const tab = window.open('', '_blank')
+      if (!tab) {
+        this.$message.warning('浏览器拦截了新窗口，请允许弹窗后重试')
+        return
+      }
+
+      tab.opener = null
+      tab.document.write('<!doctype html><html><head><meta charset="utf-8"><title>日志详情加载中</title></head><body style="margin:0;padding:16px;font-family:Arial,Helvetica,sans-serif;color:#334155;">报告加载中...</body></html>')
+      tab.document.close()
+
+      try {
+        const html = await getLogHtml(row.id)
+        tab.document.open()
+        tab.document.write(html)
+        tab.document.close()
+      } catch (e) {
+        tab.document.open()
+        tab.document.write('<!doctype html><html><head><meta charset="utf-8"><title>日志详情加载失败</title></head><body style="margin:0;padding:16px;font-family:Arial,Helvetica,sans-serif;color:#b91c1c;">报告加载失败，请稍后重试。</body></html>')
+        tab.document.close()
+      }
     }
   }
 }
@@ -152,6 +198,10 @@ export default {
   margin-bottom: 5px;
   font-size: 11px;
   color: var(--am-text2);
+}
+.log-filterbar .el-select {
+  display: block;
+  width: 100%;
 }
 .filter-actions {
   display: flex;

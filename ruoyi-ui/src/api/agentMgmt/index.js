@@ -90,6 +90,10 @@ export function listLogStats(params) {
   return request({ url: `${base}/logs/stats`, method: 'get', params })
 }
 
+export function getLogHtml(id) {
+  return request({ url: `${base}/logs/${id}/html`, method: 'get', responseType: 'text' })
+}
+
 export function logHtmlUrl(id) {
   return `${process.env.VUE_APP_BASE_API}${base}/logs/${id}/html`
 }

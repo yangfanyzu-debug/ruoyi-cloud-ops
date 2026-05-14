@@ -60,7 +60,7 @@
       <el-empty v-else description="暂无场景，点击右上角新增" />
     </div>
 
-    <el-dialog :visible.sync="dialogVisible" width="1040px" class="am-dialog wizard-dialog" :show-close="false">
+    <el-dialog :visible.sync="dialogVisible" width="1180px" class="am-dialog wizard-dialog" :show-close="false">
       <div class="wizard-shell">
         <div class="wizard-topbar">
           <div>
@@ -654,8 +654,11 @@ export default {
   background: #f1f5f9;
 }
 .wizard-dialog ::v-deep .el-dialog {
+  max-width: calc(100vw - 48px);
+  margin-top: 6vh !important;
   border-radius: 8px;
   overflow: hidden;
+  box-shadow: 0 18px 48px rgba(15, 23, 42, .18);
 }
 .wizard-dialog ::v-deep .el-dialog__header,
 .wizard-dialog ::v-deep .el-dialog__footer {
@@ -667,12 +670,15 @@ export default {
 .wizard-shell {
   display: flex;
   flex-direction: column;
-  max-height: 82vh;
+  height: 80vh;
+  min-height: 640px;
+  max-height: 840px;
   background: var(--am-bg);
 }
 .wizard-topbar {
-  min-height: 48px;
-  padding: 10px 20px;
+  flex: 0 0 auto;
+  min-height: 52px;
+  padding: 11px 18px;
   border-bottom: 1px solid var(--am-border);
   display: flex;
   align-items: center;
@@ -680,11 +686,15 @@ export default {
   gap: 12px;
 }
 .wizard-title {
-  font-size: 14px;
+  display: block;
+  font-size: 15px;
   font-weight: 600;
+  line-height: 1.35;
 }
 .wizard-sub {
-  margin-left: 8px;
+  display: block;
+  margin-top: 2px;
+  margin-left: 0;
   font-size: 11px;
   color: var(--am-text2);
 }
@@ -702,9 +712,10 @@ export default {
   background: var(--am-bg2);
 }
 .wizard-steps {
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
-  padding: 12px 20px;
+  padding: 10px 18px;
   border-bottom: 1px solid var(--am-border);
   background: var(--am-bg);
 }
@@ -750,26 +761,29 @@ export default {
 }
 .wizard-split {
   display: grid;
-  grid-template-columns: 300px 300px minmax(0, 1fr);
-  min-height: 500px;
+  grid-template-columns: minmax(300px, 340px) minmax(320px, 360px) minmax(0, 1fr);
+  flex: 1 1 auto;
+  min-height: 0;
   overflow: hidden;
 }
 .wizard-split.confirming {
-  grid-template-columns: 320px minmax(0, 1fr);
+  grid-template-columns: minmax(360px, 420px) minmax(0, 1fr);
 }
 .wizard-left,
 .wizard-middle {
-  padding: 20px;
+  padding: 16px 18px;
   border-right: 1px solid var(--am-border);
   overflow-y: auto;
+  background: #fff;
 }
 .wizard-right {
-  padding: 20px;
+  padding: 16px 18px;
   background: var(--am-bg2);
   overflow: auto;
 }
 .wizard-foot {
-  padding: 12px 20px;
+  flex: 0 0 auto;
+  padding: 10px 18px;
   border-top: 1px solid var(--am-border);
   display: flex;
   justify-content: flex-end;
@@ -777,9 +791,10 @@ export default {
   background: var(--am-bg);
 }
 .yaml-block {
-  min-height: 390px;
+  height: calc(100% - 20px);
+  min-height: 0;
   margin: 0;
-  padding: 14px 16px;
+  padding: 12px 14px;
   border: 1px solid var(--am-border);
   border-radius: 8px;
   background: var(--am-bg);
@@ -795,12 +810,19 @@ export default {
   background: #ecfdf5;
 }
 .fr {
-  margin-bottom: 14px;
+  float: none !important;
+  clear: both;
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin-bottom: 12px;
 }
 .fr:last-child {
   margin-bottom: 0;
 }
 label.fl {
+  float: none !important;
+  clear: both;
   display: block;
   margin-bottom: 4px;
   color: var(--am-text2);
@@ -825,14 +847,16 @@ label.fl {
 }
 .divider {
   height: 1px;
-  margin: 16px 0;
+  margin: 14px 0;
   background: var(--am-border);
 }
 .wizard-left input,
 .wizard-left textarea,
 .pill-input {
+  display: block;
+  clear: both;
   width: 100%;
-  padding: 7px 9px;
+  padding: 8px 10px;
   border: 1px solid var(--am-border2);
   border-radius: 6px;
   outline: none;
@@ -858,10 +882,12 @@ label.fl {
   min-height: 72px;
 }
 .collapse-hd {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 7px 0;
+  clear: both;
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  align-items: start;
+  gap: 2px 6px;
+  padding: 8px 0;
   color: var(--am-text2);
   cursor: pointer;
   font-size: 11px;
@@ -872,9 +898,14 @@ label.fl {
   color: var(--am-text);
 }
 .collapse-arrow {
+  grid-row: 1 / span 2;
   font-size: 14px;
   line-height: 1;
   transition: transform .2s;
+}
+.collapse-hd .fopt {
+  grid-column: 2;
+  line-height: 1.4;
 }
 .collapse-arrow.open {
   transform: rotate(90deg);
@@ -909,16 +940,17 @@ label.fl {
   font-size: 11px;
 }
 .pick-list {
-  max-height: 190px;
+  max-height: 210px;
   overflow-y: auto;
   border: 1px solid var(--am-border2);
-  border-radius: 6px;
+  border-radius: 8px;
 }
 .pick-item {
-  display: flex;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
   align-items: center;
-  gap: 7px;
-  padding: 8px 10px;
+  gap: 5px 7px;
+  padding: 7px 9px;
   border-bottom: 1px solid var(--am-border);
   cursor: pointer;
   font-size: 12px;
@@ -953,12 +985,15 @@ label.fl {
   font-size: 12px;
 }
 .pick-role {
+  grid-column: 2;
   min-width: 0;
   color: var(--am-text2);
-  font-size: 11px;
+  font-size: 10px;
+  line-height: 1.35;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 .pick-empty {
   padding: 9px 12px;
@@ -1047,6 +1082,15 @@ label.fl {
   color: var(--am-text2);
 }
 @media (max-width: 768px) {
+  .wizard-dialog ::v-deep .el-dialog {
+    max-width: calc(100vw - 24px);
+    margin-top: 4vh !important;
+  }
+  .wizard-shell {
+    height: auto;
+    min-height: 0;
+    max-height: 90vh;
+  }
   .am-topbar {
     align-items: flex-start;
     flex-direction: column;
@@ -1058,11 +1102,18 @@ label.fl {
   .wizard-split,
   .wizard-split.confirming {
     grid-template-columns: 1fr;
+    overflow-y: auto;
   }
   .wizard-left,
   .wizard-middle {
     border-right: 0;
     border-bottom: 1px solid var(--am-border);
+  }
+  .wizard-right {
+    min-height: 260px;
+  }
+  .yaml-block {
+    min-height: 240px;
   }
 }
 </style>
