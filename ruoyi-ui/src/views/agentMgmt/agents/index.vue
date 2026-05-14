@@ -7,6 +7,7 @@
       </div>
       <div class="am-actions">
         <el-button size="mini" icon="el-icon-refresh" @click="getList">刷新</el-button>
+        <el-button size="mini" icon="el-icon-upload2" @click="openImport">从 YAML 导入</el-button>
         <el-button size="mini" type="primary" icon="el-icon-plus" @click="openCreate">新增 Agent</el-button>
       </div>
     </div>
@@ -72,15 +73,16 @@
       <el-empty v-else description="暂无 Agent，点击右上角新增" />
     </div>
 
-    <el-dialog :visible.sync="dialogVisible" width="1080px" class="am-dialog wizard-dialog" :show-close="false">
+    <el-dialog :visible.sync="dialogVisible" width="1120px" class="am-dialog wizard-dialog agent-wizard-dialog" :show-close="false" top="4vh">
       <div class="wizard-shell">
         <div class="wizard-topbar">
           <div>
             <span class="wizard-title">{{ dialogTitle }}</span>
-            <span class="wizard-sub">{{ readonly ? '只读查看' : '填写配置并确认保存' }}</span>
+            <span class="wizard-sub">{{ readonly ? '只读查看' : '填写字段并实时生成 Agent YAML' }}</span>
           </div>
           <button class="ghost-close" @click="dialogVisible = false">关闭</button>
         </div>
+
         <div class="wizard-steps">
           <div class="step-dot" :class="{ cur: wizardStep === 0, done: wizardStep > 0 }">{{ wizardStep > 0 ? '✓' : '1' }}</div>
           <span class="step-label" :class="{ cur: wizardStep === 0 }">填写配置</span>
@@ -88,37 +90,74 @@
           <div class="step-dot" :class="{ cur: wizardStep === 1 }">2</div>
           <span class="step-label" :class="{ cur: wizardStep === 1 }">确认保存</span>
         </div>
+
         <div class="wizard-split">
           <div v-show="wizardStep === 0" class="wizard-left">
             <div class="section-title">基本信息</div>
             <div class="type-row">
-              <button type="button" class="type-btn" :class="{ active: form.type === 'expert' }" :disabled="form.id || readonly" @click="form.type = 'expert'">
+              <button type="button" class="type-btn" :class="{ active: form.type === 'expert' }" :disabled="form.id || readonly" @click="setAgentType('expert')">
                 <span class="type-icon">EX</span>
                 Expert
                 <small>执行专家</small>
               </button>
-              <button type="button" class="type-btn" :class="{ active: form.type === 'planner' }" :disabled="form.id || readonly" @click="form.type = 'planner'">
+              <button type="button" class="type-btn" :class="{ active: form.type === 'planner' }" :disabled="form.id || readonly" @click="setAgentType('planner')">
                 <span class="type-icon">PL</span>
                 Planner
                 <small>规划调度</small>
               </button>
             </div>
+            <div class="hint role-hint">{{ typeHint }}</div>
+
             <div class="fr">
               <label class="fl">名称 <span class="fkey">name</span></label>
-              <input v-model="form.agent_name" type="text" :disabled="form.id || readonly" placeholder="es_expert_agent">
-              <div class="hint">全局唯一，保存后名称不可修改</div>
+              <input v-model.trim="form.agent_name" type="text" :disabled="form.id || readonly" :placeholder="form.type === 'planner' ? 'planner_agent' : 'es_expert_agent'" @blur="checkNameLive">
+              <div class="hint">仅英文字母、数字、下划线，以字母开头；作为 Agent 的唯一标识</div>
+              <div class="field-feedback" :class="nameStatus">{{ nameMessage }}</div>
             </div>
+
             <div class="fr">
-              <label class="fl">标签 <span class="fkey">tags</span> <span class="fopt">逗号分隔</span></label>
-              <input v-model="form.tags" type="text" :disabled="readonly" placeholder="ops, es, alert">
+              <label class="fl">Role <span class="fkey">role</span></label>
+              <input v-model="form.role" type="text" :disabled="readonly" :placeholder="form.type === 'planner' ? '告警根因分析规划专家' : 'Elasticsearch集群专家'">
+              <div class="hint">LLM 的角色身份，注入到系统提示词，影响模型定位和输出风格</div>
             </div>
+
+            <div class="fr">
+              <label class="fl">Goal <span class="fkey">goal</span></label>
+              <textarea v-model="form.goal" :disabled="readonly" rows="3" />
+              <div class="hint">{{ form.type === 'planner' ? '描述规划任务目标和预期输出；具体如何调度由 Skill 文档定义' : '描述该专家的核心职责，LLM 将以此为目标执行具体分析' }}</div>
+            </div>
+
+            <div class="fr">
+              <label class="fl">Backstory <span class="fkey">backstory</span> <span class="fopt">选填</span></label>
+              <textarea v-model="form.backstory" :disabled="readonly" rows="3" />
+              <div class="hint">{{ form.type === 'planner' ? '补充约束规则，例如数据传递、何时禁止调用某类专家等' : '补充领域背景，例如擅长识别的异常类型和关键字段' }}</div>
+            </div>
+
+            <div class="divider"></div>
+            <div class="section-title">能力配置</div>
+            <div class="hint capability-hint">{{ form.type === 'planner' ? 'Planner 的 Skill 提供领域知识文档，作为提示词背景上下文' : 'Expert 的 Skill 提供工具调用能力，供 LLM 与外部系统交互' }}</div>
+            <div class="fr">
+              <label class="fl">Skills <span class="fkey">skills</span></label>
+              <div class="pill-wrap editable" :class="{ disabled: readonly }" @click="focusSkillInput">
+                <span v-for="skill in form.skills" :key="skill" class="pill">
+                  {{ skill }}<span v-if="!readonly" class="pill-x" @click.stop="removeSkill(skill)">×</span>
+                </span>
+                <input v-if="!readonly" ref="skillInput" v-model.trim="newSkill" class="pill-input" placeholder="输入 skill 名回车添加..." @keydown.enter.prevent="addSkill">
+                <span v-if="readonly && !form.skills.length" class="pill muted">未配置</span>
+              </div>
+              <div class="hint">当前环境没有 Skill 列表接口时，可手动输入 skill 名；保存时会自动写入 YAML</div>
+            </div>
+
             <div class="divider"></div>
             <div class="fr">
-              <label class="fl">YAML 内容 <span class="fkey">content</span></label>
-              <textarea v-model="form.content" :disabled="readonly" placeholder="粘贴或编辑 agent YAML..." />
-              <div class="hint">保持与原页面一致：左侧编辑，右侧实时预览即将保存的 YAML</div>
+              <label class="fl">分类标签</label>
+              <select v-model="form.tags" :disabled="readonly">
+                <option value="">请选择...</option>
+                <option v-for="cat in categories" :key="cat" :value="cat">{{ cat }}</option>
+              </select>
             </div>
           </div>
+
           <div v-show="wizardStep === 1" class="wizard-left">
             <div class="section-title">确认信息</div>
             <div class="sum-grid">
@@ -134,21 +173,43 @@
                 <div class="sum-lbl">名称</div>
                 <div class="sum-val mono">{{ form.agent_name || '-' }}</div>
               </div>
+              <div class="sum-cell wide">
+                <div class="sum-lbl">Role</div>
+                <div class="sum-val">{{ form.role || '-' }}</div>
+              </div>
+              <div class="sum-cell wide">
+                <div class="sum-lbl">Skills</div>
+                <div class="sum-val">{{ form.skills.length ? form.skills.join(', ') : '-' }}</div>
+              </div>
             </div>
             <div class="warn-box" v-if="!readonly">保存后会生成新的版本记录，激活状态需要在卡片上单独操作。</div>
           </div>
+
           <div class="wizard-right">
             <div class="preview-label">YAML 预览</div>
-            <pre class="yaml-block">{{ form.content || '# 暂无 YAML 内容' }}</pre>
+            <pre class="yaml-block">{{ agentYaml || '# 暂无 YAML 内容' }}</pre>
           </div>
         </div>
+
         <div class="wizard-foot">
           <button class="wiz-btn" @click="dialogVisible = false">{{ readonly ? '关闭' : '取消' }}</button>
           <button v-if="wizardStep === 1" class="wiz-btn" @click="wizardStep = 0">上一步</button>
           <button v-if="wizardStep === 0" class="wiz-btn pri" @click="nextStep">{{ readonly ? '查看确认' : '下一步' }}</button>
-          <button v-if="wizardStep === 1 && !readonly" class="wiz-btn pri" @click="submit">保存</button>
+          <button v-if="wizardStep === 1 && !readonly" class="wiz-btn pri" @click="submit">{{ form.id ? '保存修改' : '确认新增' }}</button>
         </div>
       </div>
+    </el-dialog>
+
+    <el-dialog title="从 YAML 导入 Agent" :visible.sync="importVisible" width="720px" class="am-dialog import-dialog">
+      <div class="fr">
+        <label class="fl">Agent YAML</label>
+        <textarea v-model="importYaml" rows="16" class="import-yaml" placeholder="粘贴包含 name、role、goal、backstory、skills 的 YAML..." />
+        <div class="hint">解析成功后会跳转到 Agent 编辑向导，你可以继续调整字段后保存。</div>
+      </div>
+      <span slot="footer" class="dialog-footer">
+        <el-button size="mini" @click="importVisible = false">取消</el-button>
+        <el-button size="mini" type="primary" @click="parseImportYaml">解析并编辑</el-button>
+      </span>
     </el-dialog>
 
     <el-dialog title="历史版本" :visible.sync="versionVisible" width="680px" class="am-dialog">
@@ -169,6 +230,7 @@
 <script>
 import {
   activateAgent,
+  checkAgentName,
   createAgent,
   deactivateAgent,
   deleteAgent,
@@ -178,6 +240,8 @@ import {
   rollbackAgent,
   updateAgent
 } from '@/api/agentMgmt'
+
+const NAME_RE = /^[a-zA-Z][a-zA-Z0-9_]*$/
 
 export default {
   name: 'AgentMgmtAgents',
@@ -197,15 +261,16 @@ export default {
         { label: 'Planner', value: 'planner' },
         { label: 'Expert', value: 'expert' }
       ],
+      categories: ['数据处理', '内容生成', '工作流', '分析', '通知', '集成', '自定义'],
       dialogVisible: false,
       readonly: false,
       wizardStep: 0,
-      form: { agent_name: '', type: 'expert', tags: '', content: '' },
-      rules: {
-        agent_name: [{ required: true, message: '请输入名称', trigger: 'blur' }],
-        type: [{ required: true, message: '请选择类型', trigger: 'change' }],
-        content: [{ required: true, message: '请输入 YAML', trigger: 'blur' }]
-      },
+      nameStatus: '',
+      nameMessage: '',
+      newSkill: '',
+      form: this.emptyForm(),
+      importVisible: false,
+      importYaml: '',
       versionVisible: false,
       versions: [],
       versionTarget: null
@@ -216,14 +281,22 @@ export default {
       if (this.readonly) return '查看 Agent'
       return this.form.id ? '编辑 Agent' : '新增 Agent'
     },
-    previewSummary() {
-      return this.summarizeText(this.form.content)
+    typeHint() {
+      return this.form.type === 'planner'
+        ? 'Planner 负责接收任务、拆解目标、按需调度 Expert，最终汇总输出报告。'
+        : 'Expert 负责执行具体分析或操作任务，由 Planner 按需调用，结果返回给 Planner 汇总。'
+    },
+    agentYaml() {
+      return this.buildAgentYaml(this.form)
     }
   },
   created() {
     this.getList()
   },
   methods: {
+    emptyForm() {
+      return { id: null, agent_name: '', type: 'expert', role: '', goal: '', backstory: '', skills: [], tags: '', content: '' }
+    },
     setFilter(key, value) {
       this.query[key] = value
       this.getList()
@@ -238,8 +311,14 @@ export default {
       if (!tags) return []
       return String(tags).split(',').map(item => item.trim()).filter(Boolean).slice(0, 4)
     },
+    parseYamlField(content, key) {
+      const match = String(content || '').match(new RegExp(`^${key}:\\s*(.+)$`, 'm'))
+      return match ? match[1].trim() : ''
+    },
     summarizeText(text) {
       if (!text) return '暂无配置内容'
+      const role = this.parseYamlField(text, 'role')
+      if (role) return role.slice(0, 90)
       const line = String(text).split('\n').map(item => item.trim()).find(Boolean)
       return line ? line.slice(0, 90) : '暂无配置内容'
     },
@@ -254,28 +333,184 @@ export default {
         this.loading = false
       }
     },
+    setAgentType(type) {
+      if (this.form.id || this.readonly) return
+      this.form.type = type
+    },
     openCreate() {
       this.readonly = false
       this.wizardStep = 0
-      this.form = { agent_name: '', type: 'expert', tags: '', content: '' }
+      this.nameStatus = ''
+      this.nameMessage = ''
+      this.newSkill = ''
+      this.form = this.emptyForm()
       this.dialogVisible = true
     },
     async openEdit(row, readonly) {
-      this.readonly = readonly || !row.can_edit
+      const data = await getAgent(row.id)
+      this.readonly = readonly || !data.can_edit
       this.wizardStep = 0
-      this.form = await getAgent(row.id)
+      this.nameStatus = ''
+      this.nameMessage = ''
+      this.newSkill = ''
+      this.form = {
+        ...this.emptyForm(),
+        ...this.parseAgentYaml(data.content, data.type),
+        id: data.id,
+        agent_name: data.agent_name,
+        type: data.type,
+        tags: data.tags || '',
+        content: data.content || ''
+      }
       this.dialogVisible = true
+    },
+    openImport() {
+      this.importYaml = ''
+      this.importVisible = true
+    },
+    parseImportYaml() {
+      const parsed = this.parseAgentYaml(this.importYaml)
+      this.form = {
+        ...this.emptyForm(),
+        ...parsed,
+        agent_name: parsed.agent_name || 'imported_agent'
+      }
+      this.readonly = false
+      this.wizardStep = 0
+      this.nameStatus = ''
+      this.nameMessage = '解析成功，请确认字段后保存'
+      this.importVisible = false
+      this.dialogVisible = true
+    },
+    parseAgentYaml(content, fallbackType = 'expert') {
+      const raw = String(content || '')
+      const get = key => {
+        const match = raw.match(new RegExp(`^${key}:\\s*(.+)$`, 'm'))
+        return match ? match[1].trim() : ''
+      }
+      const getBlock = key => {
+        const match = raw.match(new RegExp(`^${key}:\\s*[|>]-?\\n((?:[ \\t]+.*\\n?)*)`, 'm'))
+        return match ? match[1].replace(/^[ \t]{2}/gm, '').trimEnd() : ''
+      }
+      const skillBlock = raw.match(/^skills:\s*\n((?:[ \t]+-[ \t]+.+\n?)*)/m)
+      const skills = skillBlock ? skillBlock[1].split('\n').map(line => line.replace(/^\s*-\s*/, '').trim()).filter(Boolean) : []
+      const detectedType = get('type') || (raw.toLowerCase().includes('planner') ? 'planner' : fallbackType)
+      return {
+        agent_name: get('name'),
+        type: detectedType === 'planner' ? 'planner' : 'expert',
+        role: get('role'),
+        goal: getBlock('goal') || get('goal'),
+        backstory: getBlock('backstory') || get('backstory'),
+        skills
+      }
+    },
+    buildAgentYaml(data) {
+      const lines = []
+      const goalOp = data.type === 'planner' ? '|' : '>'
+      const replacements = {
+        name: [`name: ${data.agent_name || ''}`],
+        role: [`role: ${data.role || ''}`],
+        goal: [
+          `goal: ${goalOp}`,
+          ...this.toYamlBlock(data.goal).map(line => `  ${line}`)
+        ],
+        backstory: [
+          'backstory: >',
+          ...this.toYamlBlock(data.backstory).map(line => `  ${line}`)
+        ],
+        skills: this.buildSkillsYaml(data.skills)
+      }
+      if (data.id && data.content) return this.mergeAgentYaml(data.content, replacements)
+      lines.push(...replacements.name)
+      lines.push(...replacements.role)
+      lines.push('')
+      lines.push(...replacements.goal)
+      lines.push('')
+      lines.push(...replacements.backstory)
+      lines.push('')
+      lines.push(...replacements.skills)
+      return lines.join('\n')
+    },
+    buildSkillsYaml(skills) {
+      if (skills && skills.length) return ['skills:', ...skills.map(skill => `  - ${skill}`)]
+      return ['skills: []']
+    },
+    mergeAgentYaml(content, replacements) {
+      const lines = String(content || '').replace(/\r\n/g, '\n').split('\n')
+      const out = []
+      const seen = {}
+      const keyRe = /^([A-Za-z_][A-Za-z0-9_-]*):/
+      let i = 0
+      while (i < lines.length) {
+        const match = lines[i].match(keyRe)
+        if (match && replacements[match[1]]) {
+          const key = match[1]
+          if (!seen[key]) {
+            if (out.length && out[out.length - 1] !== '') out.push('')
+            out.push(...replacements[key])
+            seen[key] = true
+          }
+          i += 1
+          while (i < lines.length && !keyRe.test(lines[i])) i += 1
+        } else {
+          out.push(lines[i])
+          i += 1
+        }
+      }
+      Object.keys(replacements).forEach(key => {
+        if (!seen[key]) {
+          if (out.length && out[out.length - 1] !== '') out.push('')
+          out.push(...replacements[key])
+        }
+      })
+      return out.join('\n').replace(/\n{3,}/g, '\n\n').trimEnd()
+    },
+    toYamlBlock(value) {
+      const text = String(value || '').trimEnd()
+      return text ? text.split('\n') : ['']
+    },
+    focusSkillInput() {
+      if (!this.readonly && this.$refs.skillInput) this.$refs.skillInput.focus()
+    },
+    addSkill() {
+      const value = this.newSkill.trim()
+      if (!value || this.form.skills.includes(value)) return
+      this.form.skills.push(value)
+      this.newSkill = ''
+    },
+    removeSkill(skill) {
+      this.form.skills = this.form.skills.filter(item => item !== skill)
+    },
+    async checkNameLive() {
+      if (this.form.id || !this.form.agent_name) return
+      if (!NAME_RE.test(this.form.agent_name)) {
+        this.nameStatus = 'err'
+        this.nameMessage = '格式不正确'
+        return
+      }
+      try {
+        const result = await checkAgentName(this.form.agent_name)
+        this.nameStatus = result.available ? 'ok' : 'err'
+        this.nameMessage = result.available ? '名称可用' : result.message
+      } catch (e) {
+        this.nameStatus = ''
+        this.nameMessage = ''
+      }
     },
     nextStep() {
       if (this.validateAgentForm()) this.wizardStep = 1
     },
     validateAgentForm() {
       if (!this.form.agent_name) {
-        this.$message.warning('请输入 Agent 名称')
+        this.$message.warning('请填写 Agent 名称')
         return false
       }
-      if (!this.form.content) {
-        this.$message.warning('请输入 YAML 内容')
+      if (!NAME_RE.test(this.form.agent_name)) {
+        this.$message.warning('Agent 名称格式不正确')
+        return false
+      }
+      if (!this.form.role) {
+        this.$message.warning('请填写 Role')
         return false
       }
       return true
@@ -284,8 +519,9 @@ export default {
       if (this.validateAgentForm()) this.saveAgent()
     },
     async saveAgent() {
-      if (this.form.id) await updateAgent(this.form.id, { content: this.form.content, tags: this.form.tags })
-      else await createAgent(this.form)
+      const content = this.agentYaml
+      if (this.form.id) await updateAgent(this.form.id, { content, tags: this.form.tags || null })
+      else await createAgent({ agent_name: this.form.agent_name, type: this.form.type, content, tags: this.form.tags || null })
       this.dialogVisible = false
       this.getList()
     },
@@ -325,13 +561,17 @@ export default {
 .agent-mgmt-page {
   --am-bg: #fff;
   --am-bg2: #f8fafc;
+  --am-bg3: #f1f5f9;
   --am-border: #e5e7eb;
   --am-border2: #cbd5e1;
   --am-text: #1f2937;
   --am-text2: #64748b;
+  --am-text3: #94a3b8;
   --am-primary: #2563eb;
   --am-primary-bg: #eff6ff;
   --am-primary-text: #1d4ed8;
+  --am-green: #16a34a;
+  --am-red: #dc2626;
   color: var(--am-text);
 }
 .am-topbar {
@@ -343,433 +583,215 @@ export default {
   gap: 12px;
   border-bottom: 1px solid var(--am-border);
 }
-.am-title {
-  font-size: 15px;
-  font-weight: 600;
-}
-.am-sub {
-  margin-left: 8px;
-  font-size: 11px;
-  color: var(--am-text2);
-}
-.am-actions {
-  display: flex;
-  gap: 6px;
-}
+.am-title { font-size: 15px; font-weight: 600; }
+.am-sub { margin-left: 8px; font-size: 11px; color: var(--am-text2); }
+.am-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
 .am-filterbar {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 7px;
   padding: 12px 0;
   border-bottom: 1px solid var(--am-border);
 }
-.filter-label {
-  margin-left: 6px;
-  font-size: 11px;
-  color: var(--am-text2);
-}
-.filter-label:first-child {
-  margin-left: 0;
-}
+.filter-label { margin-left: 6px; font-size: 11px; color: var(--am-text2); }
+.filter-label:first-child { margin-left: 0; }
 .filter-btn {
-  padding: 4px 10px;
-  font-size: 11px;
+  height: 26px;
+  padding: 0 10px;
   border: 1px solid var(--am-border);
-  border-radius: 20px;
-  cursor: pointer;
-  background: var(--am-bg);
+  border-radius: 6px;
+  background: #fff;
   color: var(--am-text2);
-  transition: all .15s;
-}
-.filter-btn:hover {
-  border-color: var(--am-border2);
+  font-size: 11px;
+  cursor: pointer;
 }
 .filter-btn.active {
-  background: var(--am-primary-bg);
   border-color: var(--am-primary);
+  background: var(--am-primary-bg);
   color: var(--am-primary-text);
-  font-weight: 500;
 }
-.am-scroll {
-  min-height: 260px;
-  padding-top: 14px;
-}
+.am-scroll { min-height: 360px; padding-top: 14px; }
 .agent-card-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
   gap: 12px;
 }
 .agent-card {
-  background: var(--am-bg);
+  padding: 14px;
   border: 1px solid var(--am-border);
   border-radius: 8px;
-  padding: 11px 12px 10px;
+  background: var(--am-bg);
   transition: border-color .15s, box-shadow .15s;
 }
-.agent-card:hover {
-  border-color: var(--am-border2);
-  box-shadow: 0 8px 20px rgba(15, 23, 42, .04);
-}
-.agent-card.readonly {
-  background: #fbfdff;
-}
-.card-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 6px;
-}
-.card-name {
-  font-family: Consolas, Monaco, monospace;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--am-text);
-  line-height: 1.35;
-  word-break: break-word;
-}
-.card-role {
-  margin-top: 3px;
-  font-size: 11px;
-  color: var(--am-text2);
-  line-height: 1.4;
-  word-break: break-word;
-  display: -webkit-box;
-  overflow: hidden;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-}
-.status-badge,
-.badge {
+.agent-card:hover { border-color: var(--am-border2); box-shadow: 0 8px 20px rgba(15, 23, 42, .04); }
+.agent-card.readonly { background: #fbfdff; }
+.card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+.card-name { font-family: Consolas, Monaco, monospace; font-size: 14px; font-weight: 600; color: var(--am-text); }
+.card-role { margin-top: 4px; font-size: 11px; color: var(--am-text2); line-height: 1.5; }
+.status-badge, .badge {
   display: inline-flex;
   align-items: center;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: 6px;
   font-size: 10px;
-  padding: 2px 7px;
-  border-radius: 8px;
-  font-weight: 500;
   white-space: nowrap;
 }
-.st-active {
-  color: #047857;
-  background: #ecfdf5;
-}
-.st-inactive {
-  color: #64748b;
-  background: #f1f5f9;
-}
-.st-draft {
-  color: #b45309;
-  background: #fffbeb;
-}
-.badge-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin-bottom: 8px;
-}
-.bp {
-  color: var(--am-primary-text);
-  background: var(--am-primary-bg);
-}
-.bs {
-  color: #047857;
-  background: #ecfdf5;
-}
-.ro {
-  color: #475569;
-  background: #f1f5f9;
-}
-.tag {
-  color: #7c3aed;
-  background: #f5f3ff;
-}
+.st-draft { color: #6b7280; background: #f3f4f6; }
+.st-active { color: #047857; background: #ecfdf5; }
+.st-inactive { color: #9f1239; background: #fff1f2; }
+.badge-row { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 12px; }
+.badge.bp { color: var(--am-primary-text); background: var(--am-primary-bg); }
+.badge.bs { color: #0f766e; background: #ecfdf5; }
+.badge.ro { color: #7c2d12; background: #fffbeb; }
+.badge.tag { color: #475569; background: var(--am-bg3); }
 .meta-grid {
   display: grid;
-  grid-template-columns: .8fr 1fr 1.6fr;
-  gap: 0;
-  margin-bottom: 8px;
-  border: 1px solid var(--am-border);
-  border-radius: 6px;
-  background: var(--am-bg2);
-  overflow: hidden;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 12px;
 }
+.meta-grid .wide { grid-column: 1 / -1; }
 .meta-grid div {
-  padding: 6px 8px;
   min-width: 0;
-  border-left: 1px solid var(--am-border);
+  padding: 8px 9px;
+  border-radius: 7px;
+  background: var(--am-bg2);
 }
-.meta-grid div:first-child {
-  border-left: 0;
-}
-.meta-grid .wide {
-  grid-column: auto;
-}
-.meta-grid span {
-  display: block;
-  margin-bottom: 2px;
-  font-size: 10px;
-  color: var(--am-text2);
-}
+.meta-grid span { display: block; margin-bottom: 3px; font-size: 10px; color: var(--am-text2); }
 .meta-grid strong {
   display: block;
-  font-size: 11px;
-  font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.card-foot {
-  display: flex;
-  align-items: center;
-  flex-wrap: nowrap;
-  gap: 5px;
-  padding-top: 8px;
-  border-top: 1px solid var(--am-border);
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-.card-foot::-webkit-scrollbar {
-  display: none;
-}
-.card-foot .el-button {
-  flex: 0 0 auto;
-  padding: 6px 9px;
-  margin-left: 0;
-  white-space: nowrap;
-}
-.card-foot .el-dropdown {
-  flex: 0 0 auto;
-}
-.card-foot .el-icon--right {
-  margin-left: 3px;
-}
-.split-editor {
-  display: grid;
-  grid-template-columns: 280px minmax(0, 1fr);
-  gap: 18px;
-}
-.preview-card {
-  margin-top: 12px;
-  padding: 12px;
-  border: 1px solid var(--am-border);
-  border-radius: 8px;
-  background: var(--am-bg2);
-}
-.preview-label {
-  margin-bottom: 5px;
-  font-size: 10px;
-  color: var(--am-text2);
-}
-.preview-name {
-  margin-bottom: 5px;
-  font-family: Consolas, Monaco, monospace;
-  font-size: 12px;
-  font-weight: 600;
-}
-.preview-text {
   font-size: 11px;
-  color: var(--am-text2);
-  line-height: 1.45;
-  word-break: break-word;
+  font-weight: 500;
 }
-.agent-mgmt-page ::v-deep .el-textarea__inner {
-  font-family: Consolas, Monaco, monospace;
-  font-size: 12px;
-}
-.wizard-dialog ::v-deep .el-dialog {
-  max-width: calc(100vw - 48px);
-  margin-top: 7vh !important;
+.card-foot { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; }
+.card-foot .el-button { margin-left: 0; }
+::v-deep .wizard-dialog .el-dialog {
+  margin-bottom: 0;
   border-radius: 8px;
   overflow: hidden;
-  box-shadow: 0 18px 48px rgba(15, 23, 42, .18);
 }
-.wizard-dialog ::v-deep .el-dialog__header,
-.wizard-dialog ::v-deep .el-dialog__footer {
-  display: none;
-}
-.wizard-dialog ::v-deep .el-dialog__body {
+::v-deep .wizard-dialog .el-dialog__header,
+::v-deep .wizard-dialog .el-dialog__body {
   padding: 0;
 }
 .wizard-shell {
+  height: min(760px, 90vh);
   display: flex;
   flex-direction: column;
-  height: 78vh;
-  min-height: 620px;
-  max-height: 820px;
-  background: var(--am-bg);
+  background: #fff;
 }
 .wizard-topbar {
   flex: 0 0 auto;
-  min-height: 52px;
-  padding: 11px 18px;
-  border-bottom: 1px solid var(--am-border);
+  padding: 18px 20px 14px;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
+  border-bottom: 1px solid var(--am-border);
 }
-.wizard-title {
-  display: block;
-  font-size: 15px;
-  font-weight: 600;
-  line-height: 1.35;
-}
-.wizard-sub {
-  display: block;
-  margin-top: 2px;
-  margin-left: 0;
-  font-size: 11px;
-  color: var(--am-text2);
-}
+.wizard-title { display: block; font-size: 15px; font-weight: 600; color: var(--am-text); }
+.wizard-sub { display: block; margin-top: 5px; font-size: 11px; color: var(--am-text2); }
 .ghost-close {
-  padding: 5px 12px;
-  border: 1px solid transparent;
-  border-radius: 6px;
+  border: 0;
   background: transparent;
-  color: var(--am-text2);
-  cursor: pointer;
+  color: #475569;
   font-size: 12px;
-}
-.ghost-close:hover {
-  color: var(--am-text);
-  background: var(--am-bg2);
+  cursor: pointer;
 }
 .wizard-steps {
   flex: 0 0 auto;
+  height: 44px;
+  padding: 0 18px;
   display: flex;
   align-items: center;
-  padding: 10px 18px;
   border-bottom: 1px solid var(--am-border);
-  background: var(--am-bg);
 }
 .step-dot {
   width: 22px;
   height: 22px;
+  border: 1px solid var(--am-border2);
   border-radius: 50%;
-  border: 1.5px solid var(--am-border2);
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 10px;
+  font-size: 11px;
   color: var(--am-text2);
-  flex-shrink: 0;
+  background: #fff;
 }
-.step-dot.cur {
+.step-dot.cur, .step-dot.done {
   border-color: var(--am-primary);
   color: var(--am-primary);
 }
-.step-dot.done {
+.step-label { margin: 0 10px 0 7px; font-size: 11px; color: var(--am-text2); }
+.step-label.cur { color: var(--am-primary-text); font-weight: 600; }
+.step-line { flex: 1; height: 1px; background: var(--am-border); }
+.step-line.done { background: var(--am-primary); }
+.wizard-split {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(390px, 440px) minmax(0, 1fr);
+}
+.wizard-left {
+  min-width: 0;
+  padding: 18px;
+  overflow-y: auto;
+  border-right: 1px solid var(--am-border);
+}
+.wizard-right {
+  min-width: 0;
+  padding: 18px 20px;
+  overflow: auto;
+  background: var(--am-bg2);
+}
+.wizard-foot {
+  flex: 0 0 auto;
+  padding: 12px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  border-top: 1px solid var(--am-border);
+}
+.wiz-btn {
+  min-width: 72px;
+  height: 30px;
+  border: 1px solid var(--am-border2);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--am-text);
+  font-size: 12px;
+  cursor: pointer;
+}
+.wiz-btn.pri {
   border-color: var(--am-primary);
   background: var(--am-primary);
   color: #fff;
 }
-.step-line {
-  flex: 1;
-  height: 1px;
-  margin: 0 4px;
-  background: var(--am-border);
-}
-.step-line.done {
-  background: var(--am-primary);
-}
-.step-label {
-  padding: 0 6px;
-  font-size: 11px;
-  color: var(--am-text2);
-  white-space: nowrap;
-}
-.step-label.cur {
-  color: var(--am-primary-text);
-  font-weight: 500;
-}
-.wizard-split {
-  display: grid;
-  grid-template-columns: minmax(340px, 400px) minmax(0, 1fr);
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow: hidden;
-}
-.wizard-left {
-  padding: 16px 18px;
-  border-right: 1px solid var(--am-border);
-  overflow-y: auto;
-  background: #fff;
-}
-.wizard-right {
-  padding: 16px 18px;
-  background: var(--am-bg2);
-  overflow: auto;
-}
-.wizard-foot {
-  flex: 0 0 auto;
-  padding: 10px 18px;
-  border-top: 1px solid var(--am-border);
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  background: var(--am-bg);
-}
-.type-row {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 12px;
-}
+.section-title { margin-bottom: 10px; font-size: 12px; font-weight: 600; color: #334155; }
+.type-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 6px; }
 .type-btn {
-  flex: 1;
-  min-height: 64px;
-  padding: 8px 10px;
+  height: 72px;
   border: 1px solid var(--am-border2);
-  border-radius: 6px;
-  background: var(--am-bg);
-  color: var(--am-text2);
+  border-radius: 7px;
+  background: #fff;
+  color: #334155;
   cursor: pointer;
-  font-size: 12px;
   text-align: center;
-  transition: all .15s;
-}
-.type-btn:hover {
-  border-color: var(--am-primary);
-  color: var(--am-primary-text);
 }
 .type-btn.active {
   border-color: var(--am-primary);
   background: var(--am-primary-bg);
-  color: var(--am-primary-text);
+  color: var(--am-primary);
 }
-.type-btn:disabled {
-  cursor: not-allowed;
-  opacity: .75;
-}
-.type-icon {
-  display: block;
-  margin: 0 auto 4px;
-  height: 20px;
-  line-height: 20px;
-  font-family: Consolas, Monaco, monospace;
-  font-size: 16px;
-}
-.type-btn small {
-  display: block;
-  margin-top: 2px;
-  font-size: 10px;
-  color: var(--am-text2);
-}
-.yaml-block {
-  height: calc(100% - 20px);
-  min-height: 0;
-  margin: 0;
-  padding: 12px 14px;
-  border: 1px solid var(--am-border);
-  border-radius: 8px;
-  background: var(--am-bg);
-  color: var(--am-text);
-  font-family: Consolas, Monaco, monospace;
-  font-size: 11px;
-  line-height: 1.85;
-  white-space: pre;
-  overflow-x: auto;
-}
+.type-btn:disabled { cursor: not-allowed; opacity: .7; }
+.type-icon { display: block; margin-bottom: 3px; font-size: 14px; font-weight: 700; }
+.type-btn small { display: block; margin-top: 2px; font-size: 10px; color: var(--am-text2); }
+.role-hint, .capability-hint { margin-bottom: 12px; }
 .fr {
   float: none !important;
   clear: both;
@@ -778,176 +800,158 @@ export default {
   box-sizing: border-box;
   margin-bottom: 12px;
 }
-.fr:last-child {
-  margin-bottom: 0;
-}
 label.fl {
   float: none !important;
   clear: both;
   display: block;
-  margin-bottom: 4px;
-  color: var(--am-text2);
+  width: 100%;
+  margin: 0 0 5px;
   font-size: 11px;
   font-weight: 500;
+  color: #475569;
 }
 .fkey {
   margin-left: 3px;
-  color: #94a3b8;
   font-family: Consolas, Monaco, monospace;
   font-size: 10px;
-  font-weight: 400;
+  color: #64748b;
 }
-.fopt,
-.hint {
-  color: #94a3b8;
-  font-size: 10px;
-}
-.hint {
-  margin-top: 3px;
-}
-.divider {
-  height: 1px;
-  margin: 14px 0;
-  background: var(--am-border);
-}
-.wizard-left input,
-.wizard-left textarea {
+.fopt { font-size: 10px; color: #94a3b8; }
+.fr input,
+.fr textarea,
+.fr select {
   display: block;
-  clear: both;
   width: 100%;
-  padding: 8px 10px;
-  border: 1px solid var(--am-border2);
-  border-radius: 6px;
-  outline: none;
-  background: var(--am-bg);
-  color: var(--am-text);
-  font-family: inherit;
-  font-size: 12px;
-  transition: border-color .15s;
   box-sizing: border-box;
-}
-.wizard-left input:focus,
-.wizard-left textarea:focus {
-  border-color: var(--am-primary);
-}
-.wizard-left textarea {
-  min-height: 260px;
-  resize: vertical;
-  font-family: Consolas, Monaco, monospace;
-  font-size: 11px;
-  line-height: 1.65;
-}
-.wiz-btn {
-  padding: 5px 12px;
-  border: 1px solid var(--am-border2);
-  border-radius: 6px;
-  background: var(--am-bg);
-  color: var(--am-text);
-  cursor: pointer;
+  border: 1px solid #cbd5e1;
+  border-radius: 7px;
+  padding: 8px 9px;
+  color: #1f2937;
   font-size: 12px;
-  transition: all .15s;
+  outline: none;
+  background: #fff;
 }
-.wiz-btn:hover {
-  background: var(--am-bg2);
+.fr textarea {
+  min-height: 82px;
+  resize: vertical;
+  line-height: 1.55;
 }
-.wiz-btn.pri {
+.fr input:focus,
+.fr textarea:focus,
+.fr select:focus {
   border-color: var(--am-primary);
-  background: var(--am-primary);
-  color: #fff;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, .08);
 }
-.wiz-btn.pri:hover {
-  background: #1d4ed8;
-}
-.sum-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-}
-.sum-cell {
-  padding: 9px 11px;
-  border-radius: 6px;
-  background: var(--am-bg2);
-}
-.sum-cell.wide {
-  grid-column: 1 / -1;
-}
-.sum-lbl {
-  margin-bottom: 3px;
+.hint {
+  margin-top: 5px;
   font-size: 10px;
+  line-height: 1.5;
   color: var(--am-text2);
 }
-.sum-val {
-  font-size: 12px;
-  font-weight: 500;
-  word-break: break-word;
+.field-feedback {
+  min-height: 16px;
+  margin-top: 4px;
+  font-size: 10px;
 }
-.mono {
+.field-feedback.ok { color: var(--am-green); }
+.field-feedback.err { color: var(--am-red); }
+.divider { height: 1px; margin: 15px 0; background: var(--am-border); }
+.pill-wrap {
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 7px;
+  background: #fff;
+}
+.pill-wrap.editable { cursor: text; }
+.pill-wrap.disabled { background: #f8fafc; }
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: var(--am-primary-bg);
+  color: var(--am-primary-text);
+  font-size: 11px;
+}
+.pill.muted { color: var(--am-text2); background: var(--am-bg3); }
+.pill-x { cursor: pointer; font-weight: 700; }
+.pill-input {
+  flex: 1 1 160px;
+  min-width: 140px;
+  border: 0 !important;
+  padding: 2px !important;
+  box-shadow: none !important;
+}
+.preview-label {
+  margin-bottom: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #475569;
+}
+.yaml-block {
+  min-height: 100%;
+  margin: 0;
+  padding: 14px;
+  border: 1px solid #dbe3ef;
+  border-radius: 8px;
+  background: #fff;
+  color: #0f172a;
   font-family: Consolas, Monaco, monospace;
+  font-size: 12px;
+  line-height: 1.75;
+  white-space: pre-wrap;
 }
+.sum-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+.sum-cell {
+  padding: 10px 11px;
+  border-radius: 7px;
+  background: var(--am-bg2);
+}
+.sum-cell.wide { grid-column: 1 / -1; }
+.sum-lbl { margin-bottom: 5px; font-size: 10px; color: var(--am-text2); }
+.sum-val { font-size: 12px; font-weight: 500; line-height: 1.5; color: var(--am-text); }
+.sum-val.mono { font-family: Consolas, Monaco, monospace; }
 .warn-box {
   margin-top: 12px;
-  padding: 9px 11px;
-  border: 1px solid #fde68a;
-  border-radius: 6px;
+  padding: 9px 10px;
+  border-radius: 7px;
   background: #fffbeb;
   color: #92400e;
   font-size: 11px;
   line-height: 1.5;
 }
-.version-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+.import-yaml {
+  min-height: 320px;
+  font-family: Consolas, Monaco, monospace;
+  line-height: 1.6;
 }
+.version-list { display: flex; flex-direction: column; gap: 8px; }
 .version-card {
+  padding: 10px 12px;
+  border: 1px solid var(--am-border);
+  border-radius: 7px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 10px 12px;
-  border: 1px solid var(--am-border);
-  border-radius: 8px;
 }
-.version-title {
-  font-family: Consolas, Monaco, monospace;
-  font-size: 12px;
-  font-weight: 600;
+.version-title { font-weight: 600; color: var(--am-text); }
+.version-meta { margin-top: 3px; font-size: 11px; color: var(--am-text2); }
+@media (max-width: 900px) {
+  .wizard-shell { height: 88vh; }
+  .wizard-split { grid-template-columns: 1fr; }
+  .wizard-left { border-right: 0; border-bottom: 1px solid var(--am-border); }
+  .agent-card-grid { grid-template-columns: 1fr; }
 }
-.version-meta {
-  margin-top: 4px;
-  font-size: 11px;
-  color: var(--am-text2);
-}
-@media (max-width: 768px) {
-  .wizard-dialog ::v-deep .el-dialog {
-    max-width: calc(100vw - 24px);
-    margin-top: 4vh !important;
-  }
-  .wizard-shell {
-    height: auto;
-    min-height: 0;
-    max-height: 90vh;
-  }
-  .am-topbar {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-  .split-editor {
-    grid-template-columns: 1fr;
-  }
-  .wizard-split {
-    grid-template-columns: 1fr;
-    overflow-y: auto;
-  }
-  .wizard-left {
-    border-right: 0;
-    border-bottom: 1px solid var(--am-border);
-  }
-  .wizard-right {
-    min-height: 260px;
-  }
-  .yaml-block {
-    min-height: 240px;
-  }
+@media (max-width: 640px) {
+  .am-topbar { align-items: flex-start; flex-direction: column; }
+  .card-foot { flex-wrap: wrap; }
+  .type-row, .sum-grid, .meta-grid { grid-template-columns: 1fr; }
 }
 </style>
