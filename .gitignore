@@ -38,6 +38,10 @@ nbdist/
 ######################################################################
 # Others
 *.log
+*.zip
+*.tar
+*.tar.gz
+*.tgz
 *.xml.versionsBackup
 *.swp
 
