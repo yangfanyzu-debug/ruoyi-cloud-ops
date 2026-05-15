@@ -23,7 +23,7 @@
 
     <div v-loading="loading" class="am-scroll">
       <div v-if="rows.length" class="scenario-list">
-        <div v-for="row in rows" :key="row.id" class="scenario-card" :class="{ readonly: !row.can_edit }">
+        <div v-for="row in rows" :key="row.id" class="scenario-card" :class="[{ readonly: !row.can_edit }, 'status-' + row.status]">
           <div class="scard-head">
             <div>
               <div class="scard-name">{{ row.scenario_name }}</div>
@@ -43,7 +43,7 @@
             <span v-if="!row.can_edit" class="readonly-mark">只读</span>
           </div>
           <div class="scard-foot">
-            <el-button size="mini" @click="openEdit(row, true)">查看</el-button>
+            <el-button size="mini" @click="openGraph(row)">查看</el-button>
             <el-button size="mini" type="primary" :disabled="!row.can_edit" @click="openEdit(row, false)">编辑</el-button>
             <el-button v-if="row.status !== 'active'" size="mini" type="success" :disabled="!row.can_edit" @click="activate(row)">激活</el-button>
             <el-button v-else size="mini" :disabled="!row.can_edit" @click="deactivate(row)">停用</el-button>
@@ -180,6 +180,139 @@
       </div>
     </el-dialog>
 
+    <el-dialog :visible.sync="graphVisible" width="1180px" class="am-dialog graph-dialog" :show-close="false" top="5vh">
+      <div v-if="graphScenario" class="graph-shell">
+        <div class="graph-head">
+          <div>
+            <div class="graph-kicker">场景编排关系</div>
+            <div class="graph-title-row">
+              <span class="graph-title">{{ graphScenario.scenario_name }}</span>
+              <span class="status-badge" :class="'st-' + graphScenario.status">{{ statusText(graphScenario.status) }}</span>
+            </div>
+            <div class="graph-sub">{{ graphScenario.description || '暂无场景描述' }}</div>
+          </div>
+          <div class="graph-actions">
+            <button v-if="graphScenario.can_edit" type="button" class="wiz-btn" @click="editGraphScenario">编辑场景</button>
+            <button type="button" class="ghost-close" @click="graphVisible = false">关闭</button>
+          </div>
+        </div>
+
+        <div class="graph-body">
+          <div class="graph-canvas">
+            <div class="graph-summary">
+              <div>
+                <span class="summary-num">{{ graphExpertNodes.length }}</span>
+                <span class="summary-label">Expert</span>
+              </div>
+              <div>
+                <span class="summary-num">{{ graphPlannerNode ? 1 : 0 }}</span>
+                <span class="summary-label">Planner</span>
+              </div>
+              <div>
+                <span class="summary-num">{{ graphNodes.reduce((total, node) => total + node.skills.length, 0) }}</span>
+                <span class="summary-label">Skills</span>
+              </div>
+            </div>
+
+            <div class="graph-map">
+              <svg class="graph-lines" viewBox="0 0 900 520" preserveAspectRatio="none">
+                <defs>
+                  <marker id="graph-arrow-task" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto">
+                    <path d="M0,0 L10,5 L0,10 Z" fill="#3b82f6" />
+                  </marker>
+                  <marker id="graph-arrow-result" markerWidth="10" markerHeight="10" refX="1" refY="5" orient="auto">
+                    <path d="M10,0 L0,5 L10,10 Z" fill="#16a34a" />
+                  </marker>
+                </defs>
+                <g v-for="(node, index) in graphExpertNodes" :key="node.id + '-links'">
+                  <path
+                    :d="graphTaskLinePath(index, graphExpertNodes.length)"
+                    class="graph-line task-line"
+                    marker-end="url(#graph-arrow-task)"
+                  />
+                  <path
+                    :d="graphResultLinePath(index, graphExpertNodes.length)"
+                    class="graph-line result-line"
+                    marker-end="url(#graph-arrow-result)"
+                  />
+                  <text class="graph-line-label task-label" :x="graphTaskLabelX" :y="graphTaskLabelY(index, graphExpertNodes.length)">任务分发</text>
+                  <text class="graph-line-label result-label" :x="graphResultLabelX" :y="graphResultLabelY(index, graphExpertNodes.length)">结果回传</text>
+                </g>
+              </svg>
+
+              <div class="graph-column planner-column">
+                <div class="column-label">调度中枢</div>
+                <div v-if="graphPlannerNode" class="graph-node-wrap">
+                  <button
+                    type="button"
+                    class="agent-node planner-node"
+                    :class="{ selected: selectedGraphAgent && selectedGraphAgent.id === graphPlannerNode.id, missing: graphPlannerNode.status === 'missing', empty: graphPlannerNode.status === 'empty' }"
+                    @click="selectGraphAgent(graphPlannerNode)"
+                  >
+                    <span class="node-type">Planner</span>
+                    <span class="node-name">{{ graphPlannerNode.name }}</span>
+                    <span class="node-role">{{ graphPlannerNode.role }}</span>
+                    <span class="node-skill-badge" :class="{ empty: !graphPlannerNode.skills.length }">{{ graphPlannerNode.skills.length || '0' }}</span>
+                  </button>
+                  <div v-if="!graphPlannerNode.skills.length" class="node-skill-warning">暂无 Skill</div>
+                </div>
+                <div v-else class="graph-empty">未配置 Planner</div>
+              </div>
+
+              <div class="graph-channel"></div>
+
+              <div class="graph-column expert-column">
+                <div class="column-label">执行专家</div>
+                <div
+                  v-for="(node, index) in graphExpertNodes"
+                  :key="node.id"
+                  class="graph-node-wrap"
+                >
+                  <button
+                    type="button"
+                    class="agent-node expert-node"
+                    :class="{ selected: selectedGraphAgent && selectedGraphAgent.id === node.id, missing: node.status === 'missing', empty: node.status === 'empty' }"
+                    @click="selectGraphAgent(node)"
+                  >
+                    <span class="node-type">Expert</span>
+                    <span class="node-name">{{ node.name }}</span>
+                    <span class="node-role">{{ node.role }}</span>
+                    <span class="node-skill-badge" :class="{ empty: !node.skills.length }">{{ node.skills.length || '0' }}</span>
+                  </button>
+                  <div v-if="!node.skills.length" class="node-skill-warning">暂无 Skill</div>
+                </div>
+                <div v-if="!graphExpertNodes.length" class="graph-empty">暂未配置 Expert</div>
+              </div>
+            </div>
+          </div>
+
+          <aside class="graph-inspector">
+            <div v-if="selectedGraphAgent" class="inspector-inner">
+              <div class="inspector-type">{{ selectedGraphAgent.type === 'planner' ? 'Planner Agent' : 'Expert Agent' }}</div>
+              <div class="inspector-name">{{ selectedGraphAgent.name }}</div>
+              <div class="inspector-role">{{ selectedGraphAgent.role }}</div>
+              <div class="divider"></div>
+              <div class="inspector-section">
+                <div class="inspector-section-title">关联 Skills（{{ selectedGraphAgent.skills.length }}）</div>
+                <div v-if="selectedGraphAgent.skills.length" class="skill-rows">
+                  <div v-for="skill in selectedGraphAgent.skills" :key="skill" class="skill-row">
+                    <span class="skill-dot"></span>
+                    <span class="skill-name">{{ skill }}</span>
+                    <span class="skill-state">active</span>
+                  </div>
+                </div>
+                <div v-else class="inspector-empty">
+                  当前 Agent 还没有在 YAML 中关联 skills。
+                  <button type="button" class="mini-action" @click="goAgentPage">前往 Agent 编辑</button>
+                </div>
+              </div>
+            </div>
+            <div v-else class="inspector-empty center">选择一个 Agent 查看关联 Skills</div>
+          </aside>
+        </div>
+      </div>
+    </el-dialog>
+
     <div v-if="drawerVisible" class="drawer-overlay" @click="closeAgentDrawer" />
     <div v-if="drawerVisible" class="agent-drawer">
       <div class="drawer-head">
@@ -288,7 +421,10 @@ export default {
       drawerNameMessage: '',
       versionVisible: false,
       versions: [],
-      versionTarget: null
+      versionTarget: null,
+      graphVisible: false,
+      graphScenario: null,
+      selectedGraphAgent: null
     }
   },
   computed: {
@@ -317,6 +453,27 @@ export default {
         `    planner: ${this.form.planner ? `${this.form.planner}.yaml` : '(步骤中选择)'}`,
         `    experts: [${experts.length ? experts.join(', ') : '(步骤中选择)'}]`
       ].join('\n')
+    },
+    graphRelated() {
+      if (!this.graphScenario) return { planner: '', experts: [] }
+      return this.parseJson(this.graphScenario.related_agents, { planner: '', experts: [] })
+    },
+    graphPlannerNode() {
+      return this.graphRelated.planner ? this.makeGraphNode(this.graphRelated.planner, 'planner') : null
+    },
+    graphExpertNodes() {
+      return (this.graphRelated.experts || [])
+        .filter(item => item && item.enabled !== false && item.name)
+        .map(item => this.makeGraphNode(item.name, 'expert'))
+    },
+    graphNodes() {
+      return [this.graphPlannerNode, ...this.graphExpertNodes].filter(Boolean)
+    },
+    graphTaskLabelX() {
+      return 410
+    },
+    graphResultLabelX() {
+      return 410
     }
   },
   created() {
@@ -366,6 +523,24 @@ export default {
     parseYamlField(content, key) {
       const match = String(content || '').match(new RegExp(`^${key}:\\s*(.+)$`, 'm'))
       return match ? match[1].trim() : ''
+    },
+    parseYamlList(content, key) {
+      const raw = String(content || '')
+      const blockMatch = raw.match(new RegExp(`^${key}:\\s*\\n((?:[ \\t]+-[ \\t]+.+\\n?)*)`, 'm'))
+      if (blockMatch) {
+        return blockMatch[1]
+          .split('\n')
+          .map(line => line.replace(/^\s*-\s*/, '').trim().replace(/^['"]|['"]$/g, ''))
+          .filter(Boolean)
+      }
+      const inlineMatch = raw.match(new RegExp(`^${key}:\\s*\\[(.*)\\]\\s*$`, 'm'))
+      if (inlineMatch) {
+        return inlineMatch[1]
+          .split(',')
+          .map(item => item.trim().replace(/^['"]|['"]$/g, ''))
+          .filter(Boolean)
+      }
+      return []
     },
     agentRole(agent) {
       return this.parseYamlField(agent.content, 'role') || this.summarizeText(agent.content || agent.tags) || '-'
@@ -422,6 +597,74 @@ export default {
         experts: (related.experts || []).filter(item => item.enabled !== false).map(item => item.name)
       }
       this.dialogVisible = true
+    },
+    async openGraph(row) {
+      this.graphVisible = true
+      this.graphScenario = { ...row }
+      this.selectedGraphAgent = null
+      try {
+        if (!this.agents.length) await this.loadAgents()
+        this.graphScenario = await getScenario(row.id)
+        this.$nextTick(() => {
+          this.selectedGraphAgent = this.graphPlannerNode || this.graphExpertNodes[0] || null
+        })
+      } catch (e) {
+        this.$message.error('加载场景关系失败')
+        this.graphVisible = false
+      }
+    },
+    findAgentByName(name) {
+      return this.agents.find(item => item.agent_name === name)
+    },
+    makeGraphNode(name, type) {
+      const agent = this.findAgentByName(name)
+      const skills = agent ? this.parseYamlList(agent.content, 'skills') : []
+      return {
+        id: `${type}:${name}`,
+        name,
+        type,
+        agent,
+        skills,
+        status: agent ? (skills.length ? 'ok' : 'empty') : 'missing',
+        role: agent ? this.agentRole(agent) : '未找到 Agent 配置'
+      }
+    },
+    graphExpertY(index, total) {
+      if (total <= 1) return 260
+      const start = total <= 2 ? 212 : 150
+      const end = total <= 2 ? 314 : 370
+      return start + (end - start) * (index / (total - 1))
+    },
+    graphTaskLinePath(index, total) {
+      const y = this.graphExpertY(index, total)
+      const offset = y < 260 ? -16 : 16
+      return `M 254 260 C 360 260, 470 ${y + offset}, 596 ${y}`
+    },
+    graphResultLinePath(index, total) {
+      const y = this.graphExpertY(index, total)
+      const offset = y < 260 ? 22 : -22
+      return `M 596 ${y + offset} C 470 ${y + offset}, 360 ${260 + offset}, 254 ${260 + offset}`
+    },
+    graphTaskLabelY(index, total) {
+      const y = this.graphExpertY(index, total)
+      return y < 260 ? y - 28 : y + 34
+    },
+    graphResultLabelY(index, total) {
+      const y = this.graphExpertY(index, total)
+      return y < 260 ? y + 24 : y - 20
+    },
+    selectGraphAgent(node) {
+      this.selectedGraphAgent = node
+    },
+    editGraphScenario() {
+      const row = this.graphScenario
+      this.graphVisible = false
+      this.openEdit(row, false)
+    },
+    goAgentPage() {
+      this.graphVisible = false
+      const query = this.selectedGraphAgent ? { editAgent: this.selectedGraphAgent.name } : {}
+      this.$router.push({ path: '/agent-mgmt/agents', query })
     },
     async checkScenarioNameLive() {
       if (this.form.id || !this.form.scenario_name) return
@@ -679,17 +922,21 @@ export default {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 7px;
-  padding: 12px 0;
+  gap: 6px;
+  padding: 8px;
+  margin: 10px 0 0;
   border-bottom: 1px solid var(--am-border);
+  border: 1px solid var(--am-border);
+  border-radius: 8px;
+  background: #f8fafc;
 }
 .filter-label { margin-left: 6px; font-size: 11px; color: var(--am-text2); }
 .filter-label:first-child { margin-left: 0; }
 .filter-btn {
-  height: 26px;
+  height: 24px;
   padding: 0 10px;
   border: 1px solid var(--am-border);
-  border-radius: 6px;
+  border-radius: 5px;
   background: #fff;
   color: var(--am-text2);
   font-size: 11px;
@@ -699,34 +946,123 @@ export default {
   border-color: var(--am-primary);
   background: var(--am-primary-bg);
   color: var(--am-primary-text);
+  font-weight: 600;
 }
-.am-scroll { min-height: 360px; padding-top: 14px; }
-.scenario-list { display: flex; flex-direction: column; gap: 10px; }
+.am-scroll { min-height: 360px; padding-top: 12px; }
+.scenario-list { display: flex; flex-direction: column; gap: 8px; }
 .scenario-card {
-  padding: 14px;
+  position: relative;
+  overflow: hidden;
+  padding: 12px;
   border: 1px solid var(--am-border);
   border-radius: 8px;
   background: var(--am-bg);
-  transition: border-color .15s, box-shadow .15s;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "head actions"
+    "meta actions"
+    "strip actions";
+  column-gap: 16px;
+  align-items: center;
+  transition: border-color .15s, box-shadow .15s, transform .15s;
 }
-.scenario-card:hover { border-color: var(--am-border2); box-shadow: 0 8px 20px rgba(15, 23, 42, .04); }
+.scenario-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 3px;
+  background: #94a3b8;
+}
+.scenario-card.status-active::before { background: #16a34a; }
+.scenario-card.status-inactive::before { background: #9f1239; }
+.scenario-card.status-draft::before { background: #94a3b8; }
+.scenario-card:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, .055);
+  transform: translateY(-1px);
+}
 .scenario-card.readonly { background: #fbfdff; }
-.scard-head { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
-.scard-name { font-family: Consolas, Monaco, monospace; font-size: 14px; font-weight: 600; }
-.scard-desc { margin-top: 4px; color: var(--am-text2); font-size: 12px; line-height: 1.45; }
-.scard-meta { margin-bottom: 8px; font-size: 11px; color: var(--am-text2); }
+.scard-head { grid-area: head; display: flex; justify-content: space-between; gap: 10px; margin-bottom: 7px; padding-left: 2px; }
+.scard-head > div:first-child { min-width: 0; }
+.scard-name {
+  overflow: hidden;
+  font-family: Consolas, Monaco, monospace;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.scard-desc {
+  margin-top: 3px;
+  overflow: hidden;
+  color: var(--am-text2);
+  font-size: 11px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.scard-meta {
+  grid-area: meta;
+  margin-bottom: 7px;
+  overflow: hidden;
+  color: var(--am-text2);
+  font-size: 11px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .scard-meta span { color: var(--am-text); font-family: Consolas, Monaco, monospace; }
-.scard-meta em { margin: 0 8px; color: var(--am-border2); font-style: normal; }
-.meta-strip { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; color: var(--am-text2); font-size: 10px; }
-.readonly-mark { color: #7c2d12; }
-.scard-foot { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; }
+.scard-meta em { margin: 0 7px; color: var(--am-border2); font-style: normal; }
+.meta-strip {
+  grid-area: strip;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-bottom: 10px;
+  color: var(--am-text2);
+  font-size: 10px;
+}
+.meta-strip span {
+  max-width: 220px;
+  height: 20px;
+  padding: 0 7px;
+  display: inline-flex;
+  align-items: center;
+  overflow: hidden;
+  border-radius: 5px;
+  background: var(--am-bg2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.readonly-mark { color: #7c2d12; background: #fffbeb !important; }
+.scard-foot {
+  grid-area: actions;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: nowrap;
+  padding-left: 14px;
+  border-left: 1px solid #eef2f7;
+}
 .scard-foot .el-button { margin-left: 0; }
+::v-deep .scard-foot .el-button--mini {
+  min-width: 54px;
+  padding: 6px 9px;
+  border-radius: 5px;
+}
+::v-deep .scard-foot .el-dropdown .el-button--mini {
+  min-width: 64px;
+}
 .status-badge, .badge {
   display: inline-flex;
   align-items: center;
-  height: 20px;
-  padding: 0 7px;
-  border-radius: 6px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 5px;
   font-size: 10px;
   white-space: nowrap;
 }
@@ -966,6 +1302,367 @@ label.fl {
   line-height: 1.5;
 }
 .warn-box.compact { margin: 0 0 8px; }
+::v-deep .graph-dialog .el-dialog {
+  margin-bottom: 0;
+  border-radius: 8px;
+  overflow: hidden;
+}
+::v-deep .graph-dialog .el-dialog__header,
+::v-deep .graph-dialog .el-dialog__body {
+  padding: 0;
+}
+.graph-shell {
+  height: min(760px, 88vh);
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+}
+.graph-head {
+  flex: 0 0 auto;
+  padding: 18px 22px 16px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid var(--am-border);
+}
+.graph-kicker {
+  margin-bottom: 5px;
+  color: var(--am-primary-text);
+  font-size: 11px;
+  font-weight: 600;
+}
+.graph-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.graph-title {
+  color: var(--am-text);
+  font-family: Consolas, Monaco, monospace;
+  font-size: 17px;
+  font-weight: 700;
+  word-break: break-all;
+}
+.graph-sub {
+  margin-top: 6px;
+  color: var(--am-text2);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.graph-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+}
+.graph-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+}
+.graph-canvas {
+  position: relative;
+  min-width: 0;
+  overflow: auto;
+  padding: 22px;
+  background: #f8fafc;
+}
+.graph-summary {
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.graph-summary > div {
+  min-width: 92px;
+  padding: 9px 12px;
+  border: 1px solid var(--am-border);
+  border-radius: 8px;
+  background: #fff;
+}
+.summary-num {
+  display: block;
+  color: var(--am-text);
+  font-size: 18px;
+  font-weight: 700;
+}
+.summary-label {
+  display: block;
+  margin-top: 2px;
+  color: var(--am-text2);
+  font-size: 10px;
+}
+.graph-map {
+  position: relative;
+  min-height: 520px;
+  display: grid;
+  grid-template-columns: 300px minmax(150px, 1fr) 320px;
+  align-items: center;
+  gap: 10px;
+}
+.graph-column {
+  position: relative;
+  z-index: 2;
+  min-height: 420px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.expert-column { gap: 12px; }
+.planner-column { align-items: center; }
+.graph-node-wrap {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.planner-column .graph-node-wrap { width: 230px; }
+.column-label {
+  margin-bottom: 10px;
+  color: #475569;
+  font-size: 11px;
+  font-weight: 600;
+}
+.agent-node {
+  position: relative;
+  width: 100%;
+  min-height: 86px;
+  padding: 13px 44px 12px 14px;
+  border: 1px solid #dbe3ef;
+  border-radius: 8px;
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, .04);
+  transition: border-color .16s, box-shadow .16s, transform .16s;
+}
+.agent-node:hover {
+  border-color: #93c5fd;
+  box-shadow: 0 12px 24px rgba(15, 23, 42, .08);
+  transform: translateY(-1px);
+}
+.agent-node.selected {
+  border-color: var(--am-primary);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, .1), 0 12px 24px rgba(15, 23, 42, .08);
+}
+.agent-node.missing {
+  border-style: dashed;
+  color: var(--am-text2);
+  background: #fbfdff;
+}
+.agent-node.empty .node-skill-badge { background: #e2e8f0; color: #64748b; }
+.expert-node {
+  border-color: #dbe3ef;
+  border-width: 1px;
+}
+.planner-node {
+  width: 230px;
+  min-height: 150px;
+  padding: 18px 50px 16px 18px;
+  border-color: #bfdbfe;
+  border-width: 1px;
+  background: linear-gradient(180deg, #eff6ff 0%, #fff 100%);
+}
+.node-type {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--am-primary-text);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.node-name {
+  display: block;
+  color: var(--am-text);
+  font-family: Consolas, Monaco, monospace;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.35;
+  word-break: break-all;
+}
+.planner-node .node-name { font-size: 15px; }
+.node-role {
+  display: -webkit-box;
+  margin-top: 6px;
+  color: var(--am-text2);
+  font-size: 11px;
+  line-height: 1.45;
+  overflow: hidden;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.node-skill-badge {
+  position: absolute;
+  right: 13px;
+  bottom: 13px;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 7px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #16a34a;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+}
+.graph-channel {
+  position: relative;
+  z-index: 3;
+  height: 420px;
+  min-width: 150px;
+}
+.graph-lines {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1;
+}
+.graph-line {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.task-line {
+  stroke: #7c7bea;
+  stroke-width: 2.2;
+  opacity: .88;
+  filter: drop-shadow(0 2px 3px rgba(124, 123, 234, .14));
+}
+.result-line {
+  stroke: #16a34a;
+  stroke-dasharray: 6 6;
+  stroke-width: 1.8;
+  opacity: .78;
+}
+.graph-line-label {
+  font-size: 10px;
+  font-weight: 600;
+  paint-order: stroke;
+  stroke: #f8fafc;
+  stroke-width: 5px;
+  stroke-linejoin: round;
+}
+.task-label { fill: #7c7bea; }
+.result-label { fill: #16a34a; }
+.planner-node .node-skill-badge,
+.expert-node .node-skill-badge {
+  box-shadow: 0 2px 7px rgba(22, 163, 74, .24);
+}
+.node-skill-warning {
+  margin-top: 8px;
+  padding: 3px 8px;
+  border: 1px solid #f59e0b;
+  border-radius: 6px;
+  background: #fffbeb;
+  color: #92400e;
+  font-size: 10px;
+  line-height: 1.4;
+}
+.graph-empty {
+  padding: 18px;
+  border: 1px dashed var(--am-border2);
+  border-radius: 8px;
+  color: var(--am-text3);
+  background: #fff;
+  font-size: 12px;
+  text-align: center;
+}
+.graph-inspector {
+  min-width: 0;
+  overflow-y: auto;
+  border-left: 1px solid var(--am-border);
+  background: #fff;
+}
+.inspector-inner {
+  padding: 22px 20px;
+}
+.inspector-type {
+  margin-bottom: 6px;
+  color: var(--am-primary-text);
+  font-size: 11px;
+  font-weight: 700;
+}
+.inspector-name {
+  color: var(--am-text);
+  font-family: Consolas, Monaco, monospace;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.4;
+  word-break: break-all;
+}
+.inspector-role {
+  margin-top: 8px;
+  color: var(--am-text2);
+  font-size: 12px;
+  line-height: 1.55;
+}
+.inspector-section-title {
+  margin-bottom: 10px;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 600;
+}
+.skill-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.skill-row {
+  min-height: 36px;
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--am-border);
+  border-radius: 7px;
+  background: #fbfdff;
+}
+.skill-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--am-green);
+  flex: 0 0 auto;
+}
+.skill-name {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  color: var(--am-text);
+  font-family: Consolas, Monaco, monospace;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.skill-state {
+  color: var(--am-green);
+  font-size: 10px;
+}
+.inspector-empty {
+  padding: 12px;
+  border: 1px dashed var(--am-border2);
+  border-radius: 8px;
+  color: var(--am-text2);
+  background: #fbfdff;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.inspector-empty.center {
+  margin: 22px;
+  text-align: center;
+}
+.inspector-empty .mini-action {
+  margin-top: 10px;
+  display: inline-flex;
+  align-items: center;
+}
 .drawer-overlay {
   position: fixed;
   inset: 0;
@@ -1077,10 +1774,33 @@ label.fl {
   .wizard-shell { height: 88vh; }
   .wizard-split { grid-template-columns: 1fr; }
   .wizard-left { border-right: 0; border-bottom: 1px solid var(--am-border); }
+  .scenario-card {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "head"
+      "meta"
+      "strip"
+      "actions";
+  }
+  .scard-foot {
+    padding: 9px 0 0;
+    border-left: 0;
+    border-top: 1px solid #eef2f7;
+  }
+  .graph-shell { height: 88vh; }
+  .graph-body { grid-template-columns: 1fr; }
+  .graph-canvas { overflow-x: auto; }
+  .graph-map { min-width: 760px; }
+  .graph-inspector {
+    border-left: 0;
+    border-top: 1px solid var(--am-border);
+  }
 }
 @media (max-width: 640px) {
   .am-topbar { align-items: flex-start; flex-direction: column; }
   .scard-foot { flex-wrap: wrap; }
   .sum-grid { grid-template-columns: 1fr; }
+  .graph-head { flex-direction: column; }
+  .graph-summary { flex-wrap: wrap; }
 }
 </style>

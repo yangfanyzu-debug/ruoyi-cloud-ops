@@ -28,7 +28,7 @@
 
     <div v-loading="loading" class="am-scroll">
       <div v-if="rows.length" class="agent-card-grid">
-        <div v-for="row in rows" :key="row.id" class="agent-card" :class="{ readonly: !row.can_edit }">
+        <div v-for="row in rows" :key="row.id" class="agent-card" :class="[{ readonly: !row.can_edit }, 'type-' + row.type, 'status-' + row.status]">
           <div class="card-head">
             <div>
               <div class="card-name">{{ row.agent_name }}</div>
@@ -293,6 +293,11 @@ export default {
   created() {
     this.getList()
   },
+  watch: {
+    '$route.query.editAgent'(name) {
+      if (name) this.openAgentFromRoute(name)
+    }
+  },
   methods: {
     emptyForm() {
       return { id: null, agent_name: '', type: 'expert', role: '', goal: '', backstory: '', skills: [], tags: '', content: '' }
@@ -329,9 +334,25 @@ export default {
       this.loading = true
       try {
         this.rows = await listAgents(this.query)
+        if (this.$route.query.editAgent) this.openAgentFromRoute(this.$route.query.editAgent)
       } finally {
         this.loading = false
       }
+    },
+    async openAgentFromRoute(name) {
+      if (!name || this.dialogVisible) return
+      let target = this.rows.find(row => row.agent_name === name)
+      if (!target && this.query.scope !== 'all') {
+        this.query.scope = 'all'
+        this.rows = await listAgents(this.query)
+        target = this.rows.find(row => row.agent_name === name)
+      }
+      if (!target) {
+        this.$message.warning(`未找到 Agent：${name}`)
+        return
+      }
+      await this.openEdit(target, false)
+      this.$router.replace({ path: this.$route.path, query: {} })
     },
     setAgentType(type) {
       if (this.form.id || this.readonly) return
@@ -385,24 +406,31 @@ export default {
     parseAgentYaml(content, fallbackType = 'expert') {
       const raw = String(content || '')
       const get = key => {
-        const match = raw.match(new RegExp(`^${key}:\\s*(.+)$`, 'm'))
-        return match ? match[1].trim() : ''
+        const match = raw.match(new RegExp(`^${key}:[ \\t]*([^\\r\\n]*)`, 'm'))
+        return match ? this.cleanYamlFieldValue(match[1]) : ''
       }
       const getBlock = key => {
-        const match = raw.match(new RegExp(`^${key}:\\s*[|>]-?\\n((?:[ \\t]+.*\\n?)*)`, 'm'))
-        return match ? match[1].replace(/^[ \t]{2}/gm, '').trimEnd() : ''
+        const match = raw.match(new RegExp(`^${key}:[ \\t]*(?:[|>]|&gt;|&vert;)-?\\n((?:[ \\t]+.*\\n?)*)`, 'm'))
+        return match ? this.cleanYamlFieldValue(match[1].replace(/^[ \t]{2}/gm, '').trimEnd()) : null
       }
       const skillBlock = raw.match(/^skills:\s*\n((?:[ \t]+-[ \t]+.+\n?)*)/m)
       const skills = skillBlock ? skillBlock[1].split('\n').map(line => line.replace(/^\s*-\s*/, '').trim()).filter(Boolean) : []
       const detectedType = get('type') || (raw.toLowerCase().includes('planner') ? 'planner' : fallbackType)
+      const goalBlock = getBlock('goal')
+      const backstoryBlock = getBlock('backstory')
       return {
         agent_name: get('name'),
         type: detectedType === 'planner' ? 'planner' : 'expert',
         role: get('role'),
-        goal: getBlock('goal') || get('goal'),
-        backstory: getBlock('backstory') || get('backstory'),
+        goal: goalBlock !== null ? goalBlock : get('goal'),
+        backstory: backstoryBlock !== null ? backstoryBlock : get('backstory'),
         skills
       }
+    },
+    cleanYamlFieldValue(value) {
+      const text = String(value || '').trim()
+      if (['>', '|', '&gt;', '&vert;'].includes(text)) return ''
+      return text
     },
     buildAgentYaml(data) {
       const lines = []
@@ -590,17 +618,21 @@ export default {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 7px;
-  padding: 12px 0;
+  gap: 6px;
+  padding: 8px;
+  margin: 10px 0 0;
   border-bottom: 1px solid var(--am-border);
+  border: 1px solid var(--am-border);
+  border-radius: 8px;
+  background: #f8fafc;
 }
 .filter-label { margin-left: 6px; font-size: 11px; color: var(--am-text2); }
 .filter-label:first-child { margin-left: 0; }
 .filter-btn {
-  height: 26px;
+  height: 24px;
   padding: 0 10px;
   border: 1px solid var(--am-border);
-  border-radius: 6px;
+  border-radius: 5px;
   background: #fff;
   color: var(--am-text2);
   font-size: 11px;
@@ -610,56 +642,96 @@ export default {
   border-color: var(--am-primary);
   background: var(--am-primary-bg);
   color: var(--am-primary-text);
+  font-weight: 600;
 }
-.am-scroll { min-height: 360px; padding-top: 14px; }
+.am-scroll { min-height: 360px; padding-top: 12px; }
 .agent-card-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 10px;
 }
 .agent-card {
-  padding: 14px;
+  position: relative;
+  overflow: hidden;
+  padding: 12px;
   border: 1px solid var(--am-border);
   border-radius: 8px;
   background: var(--am-bg);
-  transition: border-color .15s, box-shadow .15s;
+  transition: border-color .15s, box-shadow .15s, transform .15s;
 }
-.agent-card:hover { border-color: var(--am-border2); box-shadow: 0 8px 20px rgba(15, 23, 42, .04); }
+.agent-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--am-primary);
+}
+.agent-card.type-expert::before { background: #0f766e; }
+.agent-card.type-planner::before { background: var(--am-primary); }
+.agent-card.status-inactive::before { background: #9f1239; }
+.agent-card.status-draft::before { background: #94a3b8; }
+.agent-card:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, .055);
+  transform: translateY(-1px);
+}
 .agent-card.readonly { background: #fbfdff; }
-.card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
-.card-name { font-family: Consolas, Monaco, monospace; font-size: 14px; font-weight: 600; color: var(--am-text); }
-.card-role { margin-top: 4px; font-size: 11px; color: var(--am-text2); line-height: 1.5; }
+.card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 8px; padding-left: 2px; }
+.card-head > div:first-child { min-width: 0; }
+.card-name {
+  overflow: hidden;
+  color: var(--am-text);
+  font-family: Consolas, Monaco, monospace;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.card-role {
+  margin-top: 3px;
+  overflow: hidden;
+  color: var(--am-text2);
+  font-size: 11px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .status-badge, .badge {
   display: inline-flex;
   align-items: center;
-  height: 20px;
-  padding: 0 7px;
-  border-radius: 6px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 5px;
   font-size: 10px;
   white-space: nowrap;
 }
 .st-draft { color: #6b7280; background: #f3f4f6; }
 .st-active { color: #047857; background: #ecfdf5; }
 .st-inactive { color: #9f1239; background: #fff1f2; }
-.badge-row { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 12px; }
+.badge-row { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
 .badge.bp { color: var(--am-primary-text); background: var(--am-primary-bg); }
 .badge.bs { color: #0f766e; background: #ecfdf5; }
 .badge.ro { color: #7c2d12; background: #fffbeb; }
 .badge.tag { color: #475569; background: var(--am-bg3); }
 .meta-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  margin-bottom: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin-bottom: 10px;
+  padding-top: 8px;
+  border-top: 1px solid #eef2f7;
 }
-.meta-grid .wide { grid-column: 1 / -1; }
+.meta-grid .wide { grid-column: auto; }
 .meta-grid div {
   min-width: 0;
-  padding: 8px 9px;
-  border-radius: 7px;
+  padding: 6px 8px;
+  border-radius: 6px;
   background: var(--am-bg2);
 }
-.meta-grid span { display: block; margin-bottom: 3px; font-size: 10px; color: var(--am-text2); }
+.meta-grid span { display: block; margin-bottom: 2px; font-size: 10px; color: var(--am-text2); }
 .meta-grid strong {
   display: block;
   overflow: hidden;
@@ -667,9 +739,18 @@ export default {
   white-space: nowrap;
   font-size: 11px;
   font-weight: 500;
+  line-height: 1.3;
 }
-.card-foot { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; }
+.card-foot { display: flex; align-items: center; gap: 5px; flex-wrap: nowrap; padding-top: 9px; border-top: 1px solid #eef2f7; }
 .card-foot .el-button { margin-left: 0; }
+::v-deep .card-foot .el-button--mini {
+  min-width: 54px;
+  padding: 6px 9px;
+  border-radius: 5px;
+}
+::v-deep .card-foot .el-dropdown .el-button--mini {
+  min-width: 64px;
+}
 ::v-deep .wizard-dialog .el-dialog {
   margin-bottom: 0;
   border-radius: 8px;

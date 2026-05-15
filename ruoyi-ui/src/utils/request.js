@@ -111,14 +111,19 @@ service.interceptors.response.use(res => {
   error => {
     console.log('err' + error)
     let { message } = error
+    const showError = !error.config || !error.config.headers || error.config.headers.showError !== false
+    const responseData = error.response && error.response.data
+    const backendMessage = responseData && (responseData.msg || responseData.message || responseData.detail)
     if (message == "Network Error") {
       message = "后端接口连接异常"
     } else if (message.includes("timeout")) {
       message = "系统接口请求超时"
+    } else if (backendMessage) {
+      message = backendMessage
     } else if (message.includes("Request failed with status code")) {
       message = "系统接口" + message.slice(-3) + "异常"
     }
-    Message({ message: message, type: 'error', duration: 5 * 1000 })
+    if (showError) Message({ message: message, type: 'error', duration: 5 * 1000 })
     return Promise.reject(error)
   }
 )
