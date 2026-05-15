@@ -27,11 +27,11 @@ export function deleteAgent(id) {
 }
 
 export function activateAgent(id) {
-  return request({ url: `${base}/agents/${id}/activate`, method: 'post' })
+  return request({ url: `${base}/agents/${id}/activate`, method: 'post', headers: { showError: false } })
 }
 
 export function deactivateAgent(id) {
-  return request({ url: `${base}/agents/${id}/deactivate`, method: 'post' })
+  return request({ url: `${base}/agents/${id}/deactivate`, method: 'post', headers: { showError: false } })
 }
 
 export function listAgentVersions(id) {
@@ -71,7 +71,7 @@ export function activateScenario(id) {
 }
 
 export function deactivateScenario(id) {
-  return request({ url: `${base}/scenarios/${id}/deactivate`, method: 'post' })
+  return request({ url: `${base}/scenarios/${id}/deactivate`, method: 'post', headers: { showError: false } })
 }
 
 export function listScenarioVersions(id) {

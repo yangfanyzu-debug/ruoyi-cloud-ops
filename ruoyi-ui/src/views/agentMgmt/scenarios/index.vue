@@ -566,6 +566,35 @@ export default {
     async loadAgents() {
       this.agents = await listAgents({ scope: 'all' })
     },
+    extractErrorMessage(error) {
+      const data = error && error.response && error.response.data
+      return (data && (data.detail || data.msg || data.message)) || (error && error.message) || ''
+    },
+    selectedAgentNames(source = this.form) {
+      const related = source.related_agents ? this.related(source) : null
+      const planner = related ? related.planner : source.planner
+      const experts = related
+        ? (related.experts || []).filter(item => item && item.enabled !== false).map(item => item.name)
+        : (source.experts || [])
+      return Array.from(new Set([planner, ...experts].filter(Boolean)))
+    },
+    inactiveAgentNames(names) {
+      return names.filter(name => {
+        const agent = this.agents.find(item => item.agent_name === name)
+        return !agent || agent.status !== 'active'
+      })
+    },
+    inactiveAgentTip(names) {
+      return `以下 Agent 未激活，场景暂不能激活：${names.join('、')}。请先到 Agent 管理页面激活后再试。`
+    },
+    scenarioActionError(error, action) {
+      const message = this.extractErrorMessage(error)
+      if (message.includes('Agents are not active:')) {
+        const names = message.split('Agents are not active:')[1].split(',').map(item => item.trim()).filter(Boolean)
+        return this.inactiveAgentTip(names)
+      }
+      return `${action}失败：${message || '请稍后重试'}`
+    },
     async getList() {
       this.loading = true
       try {
@@ -723,9 +752,13 @@ export default {
     },
     async saveScenario() {
       const payload = this.buildPayload()
-      if (this.form.id) await updateScenario(this.form.id, payload)
+      const isEdit = !!this.form.id
+      if (isEdit) await updateScenario(this.form.id, payload)
       else await createScenario(payload)
       this.dialogVisible = false
+      this.$message.success(isEdit ? '场景已保存' : '场景已创建')
+      const inactive = this.inactiveAgentNames(this.selectedAgentNames())
+      if (inactive.length) this.$message.warning(this.inactiveAgentTip(inactive))
       this.getList()
     },
     openAgentDrawer(type) {
@@ -852,18 +885,35 @@ export default {
         content: this.drawerForm.content,
         tags: '自定义'
       })
+      this.$message.success(`Agent「${this.drawerForm.agent_name}」已创建`)
       await this.loadAgents()
       if (this.drawerForm.type === 'planner') this.pickPlanner(this.drawerForm.agent_name)
       else if (!this.form.experts.includes(this.drawerForm.agent_name)) this.form.experts.push(this.drawerForm.agent_name)
       this.closeAgentDrawer()
     },
     async activate(row) {
-      await activateScenario(row.id)
-      this.getList()
+      await this.loadAgents()
+      const inactive = this.inactiveAgentNames(this.selectedAgentNames(row))
+      if (inactive.length) {
+        this.$message.warning(this.inactiveAgentTip(inactive))
+        return
+      }
+      try {
+        await activateScenario(row.id)
+        this.$message.success(`场景「${row.scenario_name}」已激活`)
+        this.getList()
+      } catch (error) {
+        this.$message.warning(this.scenarioActionError(error, '激活'))
+      }
     },
     async deactivate(row) {
-      await deactivateScenario(row.id)
-      this.getList()
+      try {
+        await deactivateScenario(row.id)
+        this.$message.success(`场景「${row.scenario_name}」已停用`)
+        this.getList()
+      } catch (error) {
+        this.$message.warning(this.scenarioActionError(error, '停用'))
+      }
     },
     handleMore(command, row) {
       if (command === 'versions') this.openVersions(row)
@@ -872,6 +922,7 @@ export default {
     async remove(row) {
       await this.$confirm(`确认删除 ${row.scenario_name}？`, '提示', { type: 'warning' })
       await deleteScenario(row.id)
+      this.$message.success(`场景「${row.scenario_name}」已删除`)
       this.getList()
     },
     async openVersions(row) {
@@ -882,6 +933,7 @@ export default {
     async rollback(version) {
       await this.$confirm(`确认回滚到 ${version.version}？`, '提示', { type: 'warning' })
       await rollbackScenario(this.versionTarget.id, version.id)
+      this.$message.success(`场景已回滚到 ${version.version}`)
       this.versionVisible = false
       this.getList()
     }

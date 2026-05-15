@@ -497,6 +497,18 @@ export default {
       const text = String(value || '').trimEnd()
       return text ? text.split('\n') : ['']
     },
+    extractErrorMessage(error) {
+      const data = error && error.response && error.response.data
+      return (data && (data.detail || data.msg || data.message)) || (error && error.message) || ''
+    },
+    agentActionError(error, action) {
+      const message = this.extractErrorMessage(error)
+      if (message.includes('Agent is used by active scenarios:')) {
+        const scenarios = message.split('Agent is used by active scenarios:')[1].trim()
+        return `当前 Agent 已被启用中的场景引用，不能停用。请先停用相关场景：${scenarios}`
+      }
+      return `${action}失败：${message || '请稍后重试'}`
+    },
     focusSkillInput() {
       if (!this.readonly && this.$refs.skillInput) this.$refs.skillInput.focus()
     },
@@ -548,18 +560,30 @@ export default {
     },
     async saveAgent() {
       const content = this.agentYaml
-      if (this.form.id) await updateAgent(this.form.id, { content, tags: this.form.tags || null })
+      const isEdit = !!this.form.id
+      if (isEdit) await updateAgent(this.form.id, { content, tags: this.form.tags || null })
       else await createAgent({ agent_name: this.form.agent_name, type: this.form.type, content, tags: this.form.tags || null })
+      this.$message.success(isEdit ? 'Agent 已保存' : 'Agent 已创建')
       this.dialogVisible = false
       this.getList()
     },
     async activate(row) {
-      await activateAgent(row.id)
-      this.getList()
+      try {
+        await activateAgent(row.id)
+        this.$message.success(`Agent「${row.agent_name}」已激活`)
+        this.getList()
+      } catch (error) {
+        this.$message.warning(this.agentActionError(error, '激活'))
+      }
     },
     async deactivate(row) {
-      await deactivateAgent(row.id)
-      this.getList()
+      try {
+        await deactivateAgent(row.id)
+        this.$message.success(`Agent「${row.agent_name}」已停用`)
+        this.getList()
+      } catch (error) {
+        this.$message.warning(this.agentActionError(error, '停用'))
+      }
     },
     handleMore(command, row) {
       if (command === 'versions') this.openVersions(row)
@@ -568,6 +592,7 @@ export default {
     async remove(row) {
       await this.$confirm(`确认删除 ${row.agent_name}？`, '提示', { type: 'warning' })
       await deleteAgent(row.id)
+      this.$message.success(`Agent「${row.agent_name}」已删除`)
       this.getList()
     },
     async openVersions(row) {
@@ -578,6 +603,7 @@ export default {
     async rollback(version) {
       await this.$confirm(`确认回滚到 ${version.version}？`, '提示', { type: 'warning' })
       await rollbackAgent(this.versionTarget.id, version.id)
+      this.$message.success(`Agent 已回滚到 ${version.version}`)
       this.versionVisible = false
       this.getList()
     }
