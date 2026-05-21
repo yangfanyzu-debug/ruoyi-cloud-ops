@@ -26,51 +26,92 @@
       </button>
     </div>
 
-    <div v-loading="loading" class="am-scroll">
-      <div v-if="rows.length" class="agent-card-grid">
-        <div v-for="row in rows" :key="row.id" class="agent-card" :class="[{ readonly: !row.can_edit }, 'type-' + row.type, 'status-' + row.status]">
-          <div class="card-head">
-            <div>
-              <div class="card-name">{{ row.agent_name }}</div>
-              <div class="card-role">{{ contentSummary(row) }}</div>
-            </div>
-            <span class="status-badge" :class="'st-' + row.status">{{ statusText(row.status) }}</span>
-          </div>
-          <div class="badge-row">
-            <span class="badge" :class="row.type === 'planner' ? 'bp' : 'bs'">{{ typeText(row.type) }}</span>
-            <span v-if="!row.can_edit" class="badge ro">只读</span>
-            <span v-for="tag in tagList(row.tags)" :key="tag" class="badge tag">{{ tag }}</span>
-          </div>
-          <div class="meta-grid">
-            <div>
-              <span>版本</span>
-              <strong>{{ row.version || '-' }}</strong>
-            </div>
-            <div>
-              <span>创建人</span>
-              <strong>{{ row.created_by_username || '-' }}</strong>
-            </div>
-            <div class="wide">
-              <span>更新</span>
-              <strong>{{ row.updated_at || '-' }}</strong>
-            </div>
-          </div>
-          <div class="card-foot">
-            <el-button size="mini" @click="openEdit(row, true)">查看</el-button>
-            <el-button size="mini" type="primary" :disabled="!row.can_edit" @click="openEdit(row, false)">编辑</el-button>
-            <el-button v-if="row.status !== 'active'" size="mini" type="success" :disabled="!row.can_edit" @click="activate(row)">激活</el-button>
-            <el-button v-else size="mini" :disabled="!row.can_edit" @click="deactivate(row)">停用</el-button>
-            <el-dropdown trigger="click" @command="cmd => handleMore(cmd, row)">
-              <el-button size="mini">更多<i class="el-icon-arrow-down el-icon--right" /></el-button>
-              <el-dropdown-menu slot="dropdown">
-                <el-dropdown-item command="versions">历史版本</el-dropdown-item>
-                <el-dropdown-item command="delete" :disabled="!row.can_edit || row.status === 'active'">删除</el-dropdown-item>
-              </el-dropdown-menu>
-            </el-dropdown>
+    <div class="agent-workspace">
+      <aside class="category-panel">
+        <div class="category-head">
+          <div>
+            <div class="category-title">分类目录</div>
+            <div class="category-sub">按分类浏览 Agent</div>
           </div>
         </div>
-      </div>
-      <el-empty v-else description="暂无 Agent，点击右上角新增" />
+        <button class="category-all" :class="{ active: !selectedCategory }" @click="selectAllCategories">
+          <span>全部 Agent</span>
+          <strong>{{ categoryRows.length }}</strong>
+        </button>
+        <el-tree
+          class="category-tree"
+          :data="categoryOptions"
+          :props="treeProps"
+          node-key="value"
+          :expand-on-click-node="false"
+          default-expand-all
+          highlight-current
+          @node-click="selectCategory"
+        >
+          <span slot-scope="{ node, data }" class="category-tree-node">
+            <span>{{ node.label }}</span>
+            <small>{{ categoryCount(data.value) }}</small>
+          </span>
+        </el-tree>
+      </aside>
+
+      <section class="agent-list-panel">
+        <div class="agent-list-head">
+          <div>
+            <div class="agent-list-title">{{ selectedCategoryLabel }}</div>
+            <div class="agent-list-sub">{{ rows.length }} 个 Agent{{ selectedCategory ? '，包含当前分类' + (selectedCategoryDescendantCount > 1 ? '及子分类' : '') : '' }}</div>
+          </div>
+          <button v-if="selectedCategory" class="clear-category" @click="selectAllCategories">清除分类</button>
+        </div>
+
+        <div v-loading="loading" class="am-scroll">
+          <div v-if="rows.length" class="agent-card-grid">
+            <div v-for="row in rows" :key="row.id" class="agent-card" :class="[{ readonly: !row.can_edit }, 'type-' + row.type, 'status-' + row.status]">
+              <div class="card-head">
+                <div>
+                  <div class="card-name">{{ row.agent_name }}</div>
+                  <div class="card-role">{{ contentSummary(row) }}</div>
+                </div>
+                <span class="status-badge" :class="'st-' + row.status">{{ statusText(row.status) }}</span>
+              </div>
+              <div class="badge-row">
+                <span class="badge" :class="row.type === 'planner' ? 'bp' : 'bs'">{{ typeText(row.type) }}</span>
+                <span v-if="!row.can_edit" class="badge ro">只读</span>
+                <span v-for="tag in tagList(row.tags)" :key="tag" class="badge tag">{{ tag }}</span>
+              </div>
+              <div class="meta-grid">
+                <div>
+                  <span>生效版本</span>
+                  <strong>{{ effectiveVersion(row) }}</strong>
+                </div>
+                <div>
+                  <span>最新版本</span>
+                  <strong>{{ row.version || '-' }}</strong>
+                </div>
+                <div>
+                  <span>更新</span>
+                  <strong>{{ row.updated_at || '-' }}</strong>
+                </div>
+              </div>
+              <div class="card-foot">
+                <el-button size="mini" @click="openEdit(row, true)">查看</el-button>
+                <el-button size="mini" class="compact-btn" @click="openRelatedScenarios(row)">场景</el-button>
+                <el-button size="mini" type="primary" :disabled="!row.can_edit" @click="openEdit(row, false)">编辑</el-button>
+                <el-button v-if="row.status !== 'active'" size="mini" type="success" :disabled="!row.can_edit" @click="activate(row)">激活</el-button>
+                <el-button v-else size="mini" :disabled="!row.can_edit" @click="deactivate(row)">停用</el-button>
+                <el-dropdown trigger="click" @command="cmd => handleMore(cmd, row)">
+                  <el-button size="mini">更多<i class="el-icon-arrow-down el-icon--right" /></el-button>
+                  <el-dropdown-menu slot="dropdown">
+                    <el-dropdown-item command="versions">历史版本</el-dropdown-item>
+                    <el-dropdown-item command="delete" :disabled="!row.can_edit || row.status === 'active'">删除</el-dropdown-item>
+                  </el-dropdown-menu>
+                </el-dropdown>
+              </div>
+            </div>
+          </div>
+          <el-empty v-else description="暂无 Agent，点击右上角新增" />
+        </div>
+      </section>
     </div>
 
     <el-dialog :visible.sync="dialogVisible" width="1120px" class="am-dialog wizard-dialog agent-wizard-dialog" :show-close="false" top="4vh">
@@ -150,11 +191,18 @@
 
             <div class="divider"></div>
             <div class="fr">
-              <label class="fl">分类标签</label>
-              <select v-model="form.tags" :disabled="readonly">
-                <option value="">请选择...</option>
-                <option v-for="cat in categories" :key="cat" :value="cat">{{ cat }}</option>
-              </select>
+              <label class="fl">分类标签 <span class="required">*</span></label>
+              <el-cascader
+                v-model="form.tags"
+                class="category-cascader"
+                :options="categoryOptions"
+                :props="categoryProps"
+                :disabled="readonly"
+                clearable
+                filterable
+                placeholder="请选择 Agent 分类"
+              />
+              <div class="hint">分类数据来自后端分类表，用于统一归类和筛选 Agent。</div>
             </div>
           </div>
 
@@ -167,7 +215,7 @@
               </div>
               <div class="sum-cell">
                 <div class="sum-lbl">标签</div>
-                <div class="sum-val">{{ form.tags || '-' }}</div>
+                <div class="sum-val">{{ categoryLabel(form.tags) || '-' }}</div>
               </div>
               <div class="sum-cell wide">
                 <div class="sum-lbl">名称</div>
@@ -215,14 +263,45 @@
     <el-dialog title="历史版本" :visible.sync="versionVisible" width="680px" class="am-dialog">
       <div class="version-list">
         <div v-for="version in versions" :key="version.id" class="version-card">
-          <div>
-            <div class="version-title">{{ version.version }}</div>
+          <div class="version-main">
+            <div class="version-title">
+              <span>{{ version.version }}</span>
+              <span class="version-state" :class="versionStateClass(version)">{{ versionStateText(version) }}</span>
+            </div>
             <div class="version-meta">{{ version.created_by_username || '-' }} · {{ version.created_at || '-' }}</div>
           </div>
-          <el-button size="mini" type="text" :disabled="!versionTarget || !versionTarget.can_edit" @click="rollback(version)">回滚</el-button>
+          <el-button
+            size="mini"
+            type="primary"
+            plain
+            :disabled="isVersionActive(version) || !versionTarget || !versionTarget.can_edit"
+            @click="activateVersion(version)"
+          >激活</el-button>
         </div>
         <el-empty v-if="!versions.length" description="暂无历史版本" />
       </div>
+    </el-dialog>
+
+    <el-dialog title="关联场景" :visible.sync="relatedVisible" width="760px" class="am-dialog related-dialog">
+      <div v-if="relatedTarget" class="related-head">
+        <div>
+          <div class="related-name">{{ relatedTarget.agent_name }}</div>
+          <div class="related-sub">当前 Agent 被以下场景引用，版本激活后这些场景会实时使用新的生效配置。</div>
+        </div>
+        <span class="related-count">{{ relatedScenarios.length }} 个场景</span>
+      </div>
+      <el-table v-if="relatedScenarios.length" :data="relatedScenarios" size="mini" border>
+        <el-table-column prop="scenario_name" label="场景" min-width="180" />
+        <el-table-column prop="role" label="角色" width="100">
+          <template slot-scope="scope">{{ scenarioRoleText(scope.row.role) }}</template>
+        </el-table-column>
+        <el-table-column prop="status" label="状态" width="100">
+          <template slot-scope="scope">{{ statusText(scope.row.status) }}</template>
+        </el-table-column>
+        <el-table-column prop="description" label="描述" min-width="220" show-overflow-tooltip />
+        <el-table-column prop="updated_at" label="更新" width="160" show-overflow-tooltip />
+      </el-table>
+      <el-empty v-else description="暂无关联场景" />
     </el-dialog>
   </div>
 </template>
@@ -235,9 +314,11 @@ import {
   deactivateAgent,
   deleteAgent,
   getAgent,
+  listAgentCategories,
   listAgents,
+  activateAgentVersion,
+  listAgentRelatedScenarios,
   listAgentVersions,
-  rollbackAgent,
   updateAgent
 } from '@/api/agentMgmt'
 
@@ -249,6 +330,7 @@ export default {
     return {
       loading: false,
       rows: [],
+      categoryRows: [],
       query: { scope: 'mine', status: '', type: '' },
       statusFilters: [
         { label: '全部', value: '' },
@@ -261,7 +343,21 @@ export default {
         { label: 'Planner', value: 'planner' },
         { label: 'Expert', value: 'expert' }
       ],
-      categories: ['数据处理', '内容生成', '工作流', '分析', '通知', '集成', '自定义'],
+      categoryOptions: [],
+      categoryMap: {},
+      selectedCategory: '',
+      selectedCategoryCodes: [],
+      categoryProps: {
+        value: 'value',
+        label: 'label',
+        children: 'children',
+        emitPath: false,
+        checkStrictly: true
+      },
+      treeProps: {
+        label: 'label',
+        children: 'children'
+      },
       dialogVisible: false,
       readonly: false,
       wizardStep: 0,
@@ -273,7 +369,10 @@ export default {
       importYaml: '',
       versionVisible: false,
       versions: [],
-      versionTarget: null
+      versionTarget: null,
+      relatedVisible: false,
+      relatedTarget: null,
+      relatedScenarios: []
     }
   },
   computed: {
@@ -288,9 +387,16 @@ export default {
     },
     agentYaml() {
       return this.buildAgentYaml(this.form)
+    },
+    selectedCategoryLabel() {
+      return this.selectedCategory ? this.categoryLabel(this.selectedCategory) : '全部 Agent'
+    },
+    selectedCategoryDescendantCount() {
+      return this.selectedCategoryCodes.length || 0
     }
   },
   created() {
+    this.loadCategories()
     this.getList()
   },
   watch: {
@@ -312,9 +418,54 @@ export default {
     typeText(type) {
       return type === 'planner' ? 'Planner' : 'Expert'
     },
+    effectiveVersion(row) {
+      return row.active_version || row.version || '-'
+    },
+    isVersionActive(version) {
+      return version && (version.is_active === true || Number(version.is_active) === 1)
+    },
+    versionStateText(version) {
+      return this.isVersionActive(version) ? '已生效' : '未生效'
+    },
+    versionStateClass(version) {
+      return this.isVersionActive(version) ? 'active' : 'inactive'
+    },
+    scenarioRoleText(role) {
+      return role === 'planner' ? 'Planner' : 'Expert'
+    },
+    flattenCategories(nodes, map = {}) {
+      ;(nodes || []).forEach(node => {
+        map[node.value] = node.label
+        this.flattenCategories(node.children, map)
+      })
+      return map
+    },
+    categoryLabel(value) {
+      return this.categoryMap[value] || value
+    },
+    collectCategoryCodes(node) {
+      if (!node) return []
+      return [
+        node.value,
+        ...(node.children || []).reduce((codes, child) => codes.concat(this.collectCategoryCodes(child)), [])
+      ].filter(Boolean)
+    },
+    findCategoryNode(nodes, code) {
+      for (const node of nodes || []) {
+        if (node.value === code) return node
+        const found = this.findCategoryNode(node.children, code)
+        if (found) return found
+      }
+      return null
+    },
+    categoryCount(code) {
+      const node = this.findCategoryNode(this.categoryOptions, code)
+      const codes = this.collectCategoryCodes(node)
+      return this.categoryRows.filter(row => codes.includes(row.tags)).length
+    },
     tagList(tags) {
       if (!tags) return []
-      return String(tags).split(',').map(item => item.trim()).filter(Boolean).slice(0, 4)
+      return String(tags).split(',').map(item => this.categoryLabel(item.trim())).filter(Boolean).slice(0, 4)
     },
     parseYamlField(content, key) {
       const match = String(content || '').match(new RegExp(`^${key}:\\s*(.+)$`, 'm'))
@@ -330,21 +481,56 @@ export default {
     contentSummary(row) {
       return this.summarizeText(row.content || row.description || row.tags)
     },
+    buildAgentQuery(includeCategory = true) {
+      const params = { ...this.query }
+      if (includeCategory && this.selectedCategoryCodes.length) {
+        params.category_codes = this.selectedCategoryCodes.join(',')
+      }
+      return params
+    },
     async getList() {
       this.loading = true
       try {
-        this.rows = await listAgents(this.query)
+        const baseQuery = this.buildAgentQuery(false)
+        if (this.selectedCategoryCodes.length) {
+          const [categoryRows, rows] = await Promise.all([
+            listAgents(baseQuery),
+            listAgents(this.buildAgentQuery(true))
+          ])
+          this.categoryRows = categoryRows
+          this.rows = rows
+        } else {
+          this.rows = await listAgents(baseQuery)
+          this.categoryRows = this.rows
+        }
         if (this.$route.query.editAgent) this.openAgentFromRoute(this.$route.query.editAgent)
       } finally {
         this.loading = false
       }
     },
+    async loadCategories() {
+      this.categoryOptions = await listAgentCategories()
+      this.categoryMap = this.flattenCategories(this.categoryOptions)
+    },
+    selectCategory(data) {
+      this.selectedCategory = data.value
+      this.selectedCategoryCodes = this.collectCategoryCodes(data)
+      this.getList()
+    },
+    selectAllCategories() {
+      this.selectedCategory = ''
+      this.selectedCategoryCodes = []
+      this.getList()
+    },
     async openAgentFromRoute(name) {
       if (!name || this.dialogVisible) return
       let target = this.rows.find(row => row.agent_name === name)
-      if (!target && this.query.scope !== 'all') {
+      if (!target) {
         this.query.scope = 'all'
-        this.rows = await listAgents(this.query)
+        this.selectedCategory = ''
+        this.selectedCategoryCodes = []
+        this.rows = await listAgents(this.buildAgentQuery(false))
+        this.categoryRows = this.rows
         target = this.rows.find(row => row.agent_name === name)
       }
       if (!target) {
@@ -553,6 +739,10 @@ export default {
         this.$message.warning('请填写 Role')
         return false
       }
+      if (!this.form.tags) {
+        this.$message.warning('请选择分类标签')
+        return false
+      }
       return true
     },
     submit() {
@@ -600,10 +790,23 @@ export default {
       this.versions = await listAgentVersions(row.id)
       this.versionVisible = true
     },
-    async rollback(version) {
-      await this.$confirm(`确认回滚到 ${version.version}？`, '提示', { type: 'warning' })
-      await rollbackAgent(this.versionTarget.id, version.id)
-      this.$message.success(`Agent 已回滚到 ${version.version}`)
+    async openRelatedScenarios(row) {
+      this.relatedTarget = row
+      this.relatedScenarios = await listAgentRelatedScenarios(row.id)
+      this.relatedVisible = true
+    },
+    async activateVersion(version) {
+      const scenarios = await listAgentRelatedScenarios(this.versionTarget.id)
+      const scenarioNames = scenarios.map(item => item.scenario_name).filter(Boolean)
+      const sceneText = scenarioNames.length ? scenarioNames.join('、') : '暂无关联场景'
+      await this.$confirm(
+        `确认激活 ${version.version}？该 Agent 关联的场景会实时生效：${sceneText}`,
+        '激活版本',
+        { type: 'warning' }
+      )
+      await activateAgentVersion(this.versionTarget.id, version.id)
+      this.$message.success(`Agent 已激活 ${version.version}`)
+      this.versions = await listAgentVersions(this.versionTarget.id)
       this.versionVisible = false
       this.getList()
     }
@@ -669,6 +872,146 @@ export default {
   background: var(--am-primary-bg);
   color: var(--am-primary-text);
   font-weight: 600;
+}
+.agent-workspace {
+  min-height: 480px;
+  display: grid;
+  grid-template-columns: 236px minmax(0, 1fr);
+  gap: 12px;
+  padding-top: 12px;
+}
+.category-panel {
+  align-self: start;
+  min-height: 420px;
+  padding: 12px;
+  border: 1px solid var(--am-border);
+  border-radius: 8px;
+  background: #fbfdff;
+}
+.category-head {
+  margin-bottom: 10px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+.category-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--am-text);
+}
+.category-sub {
+  margin-top: 3px;
+  font-size: 10px;
+  color: var(--am-text2);
+}
+.category-all {
+  width: 100%;
+  height: 32px;
+  margin-bottom: 8px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #fff;
+  color: #334155;
+  font-size: 12px;
+  cursor: pointer;
+}
+.category-all.active {
+  border-color: var(--am-primary);
+  background: var(--am-primary-bg);
+  color: var(--am-primary-text);
+  font-weight: 600;
+}
+.category-all strong {
+  font-size: 11px;
+  font-weight: 600;
+  color: inherit;
+}
+.category-tree {
+  background: transparent;
+}
+::v-deep .category-tree .el-tree-node__content {
+  height: 30px;
+  border-radius: 7px;
+}
+::v-deep .category-tree .el-tree-node__content:hover {
+  background: #f1f5f9;
+}
+::v-deep .category-tree .is-current > .el-tree-node__content {
+  background: var(--am-primary-bg);
+  color: var(--am-primary-text);
+  font-weight: 600;
+}
+.category-tree-node {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+}
+.category-tree-node span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.category-tree-node small {
+  flex: 0 0 auto;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #eef2f7;
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 500;
+}
+.agent-list-panel {
+  min-width: 0;
+}
+.agent-list-head {
+  min-height: 48px;
+  padding: 10px 12px;
+  border: 1px solid var(--am-border);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: #fff;
+}
+.agent-list-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--am-text);
+}
+.agent-list-sub {
+  margin-top: 3px;
+  font-size: 11px;
+  color: var(--am-text2);
+}
+.clear-category {
+  flex: 0 0 auto;
+  height: 26px;
+  padding: 0 9px;
+  border: 1px solid var(--am-border2);
+  border-radius: 6px;
+  background: #fff;
+  color: #475569;
+  font-size: 11px;
+  cursor: pointer;
+}
+.clear-category:hover {
+  border-color: var(--am-primary);
+  color: var(--am-primary-text);
 }
 .am-scroll { min-height: 360px; padding-top: 12px; }
 .agent-card-grid {
@@ -924,6 +1267,7 @@ label.fl {
   color: #64748b;
 }
 .fopt { font-size: 10px; color: #94a3b8; }
+.required { color: var(--am-red); }
 .fr input,
 .fr textarea,
 .fr select {
@@ -948,6 +1292,17 @@ label.fl {
 .fr select:focus {
   border-color: var(--am-primary);
   box-shadow: 0 0 0 2px rgba(37, 99, 235, .08);
+}
+.category-cascader {
+  display: block;
+  width: 100%;
+}
+::v-deep .category-cascader .el-input__inner {
+  height: 34px;
+  line-height: 34px;
+  border-radius: 7px;
+  border-color: #cbd5e1;
+  font-size: 12px;
 }
 .hint {
   margin-top: 5px;
@@ -1047,13 +1402,60 @@ label.fl {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
 }
-.version-title { font-weight: 600; color: var(--am-text); }
+.version-main { min-width: 0; }
+.version-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  color: var(--am-text);
+}
 .version-meta { margin-top: 3px; font-size: 11px; color: var(--am-text2); }
+.version-state {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 500;
+}
+.version-state.active { color: #047857; background: #ecfdf5; }
+.version-state.inactive { color: #64748b; background: #f1f5f9; }
+.related-head {
+  margin-bottom: 12px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.related-name {
+  font-family: Consolas, Monaco, monospace;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--am-text);
+}
+.related-sub {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--am-text2);
+}
+.related-count {
+  flex: 0 0 auto;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: var(--am-primary-bg);
+  color: var(--am-primary-text);
+  font-size: 11px;
+}
 @media (max-width: 900px) {
   .wizard-shell { height: 88vh; }
   .wizard-split { grid-template-columns: 1fr; }
   .wizard-left { border-right: 0; border-bottom: 1px solid var(--am-border); }
+  .agent-workspace { grid-template-columns: 1fr; }
+  .category-panel { min-height: auto; }
   .agent-card-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 640px) {

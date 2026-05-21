@@ -10,6 +10,10 @@ export function listAgents(params) {
   return request({ url: `${base}/agents`, method: 'get', params })
 }
 
+export function listAgentCategories() {
+  return request({ url: `${base}/agent-categories`, method: 'get' })
+}
+
 export function getAgent(id) {
   return request({ url: `${base}/agents/${id}`, method: 'get' })
 }
@@ -36,6 +40,14 @@ export function deactivateAgent(id) {
 
 export function listAgentVersions(id) {
   return request({ url: `${base}/agents/${id}/versions`, method: 'get' })
+}
+
+export function activateAgentVersion(id, versionId) {
+  return request({ url: `${base}/agents/${id}/versions/${versionId}/activate`, method: 'post', headers: { showError: false } })
+}
+
+export function listAgentRelatedScenarios(id) {
+  return request({ url: `${base}/agents/${id}/related-scenarios`, method: 'get' })
 }
 
 export function rollbackAgent(id, versionId) {
