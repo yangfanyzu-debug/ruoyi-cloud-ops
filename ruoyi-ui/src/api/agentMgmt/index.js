@@ -106,6 +106,30 @@ export function getLogHtml(id) {
   return request({ url: `${base}/logs/${id}/html`, method: 'get', responseType: 'text' })
 }
 
+export function getLogHtmlByRun(runId) {
+  return request({ url: `${base}/logs/by-run/${runId}/html`, method: 'get', responseType: 'text' })
+}
+
 export function logHtmlUrl(id) {
   return `${process.env.VUE_APP_BASE_API}${base}/logs/${id}/html`
+}
+
+export function getLlmStatsSummary(params) {
+  return request({ url: `${base}/llm-stats/summary`, method: 'get', params })
+}
+
+export function listLlmStatsFailures(params) {
+  return request({ url: `${base}/llm-stats/failures`, method: 'get', params })
+}
+
+export function getLlmStatsByRun(runId) {
+  return request({ url: `${base}/llm-stats/by-run/${runId}`, method: 'get' })
+}
+
+export function listLlmStatsByScenario(params) {
+  return request({ url: `${base}/llm-stats/by-scenario`, method: 'get', params })
+}
+
+export function logHtmlByRunUrl(runId) {
+  return `${process.env.VUE_APP_BASE_API}${base}/logs/by-run/${runId}/html`
 }

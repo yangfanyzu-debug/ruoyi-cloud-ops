@@ -97,12 +97,12 @@
                 <el-button size="mini" @click="openEdit(row, true)">查看</el-button>
                 <el-button size="mini" class="compact-btn" @click="openRelatedScenarios(row)">场景</el-button>
                 <el-button size="mini" type="primary" :disabled="!row.can_edit" @click="openEdit(row, false)">编辑</el-button>
-                <el-button v-if="row.status !== 'active'" size="mini" type="success" :disabled="!row.can_edit" @click="activate(row)">激活</el-button>
-                <el-button v-else size="mini" :disabled="!row.can_edit" @click="deactivate(row)">停用</el-button>
+                <el-button v-if="row.status === 'active'" size="mini" :disabled="!row.can_edit" @click="deactivate(row)">停用</el-button>
                 <el-dropdown trigger="click" @command="cmd => handleMore(cmd, row)">
                   <el-button size="mini">更多<i class="el-icon-arrow-down el-icon--right" /></el-button>
                   <el-dropdown-menu slot="dropdown">
                     <el-dropdown-item command="versions">历史版本</el-dropdown-item>
+                    <el-dropdown-item command="copy">复制</el-dropdown-item>
                     <el-dropdown-item command="delete" :disabled="!row.can_edit || row.status === 'active'">删除</el-dropdown-item>
                   </el-dropdown-menu>
                 </el-dropdown>
@@ -136,12 +136,12 @@
           <div v-show="wizardStep === 0" class="wizard-left">
             <div class="section-title">基本信息</div>
             <div class="type-row">
-              <button type="button" class="type-btn" :class="{ active: form.type === 'expert' }" :disabled="form.id || readonly" @click="setAgentType('expert')">
+              <button type="button" class="type-btn" :class="{ active: form.type === 'expert' }" :disabled="form.id || form.copySourceId || readonly" @click="setAgentType('expert')">
                 <span class="type-icon">EX</span>
                 Expert
                 <small>执行专家</small>
               </button>
-              <button type="button" class="type-btn" :class="{ active: form.type === 'planner' }" :disabled="form.id || readonly" @click="setAgentType('planner')">
+              <button type="button" class="type-btn" :class="{ active: form.type === 'planner' }" :disabled="form.id || form.copySourceId || readonly" @click="setAgentType('planner')">
                 <span class="type-icon">PL</span>
                 Planner
                 <small>规划调度</small>
@@ -154,6 +154,21 @@
               <input v-model.trim="form.agent_name" type="text" :disabled="form.id || readonly" :placeholder="form.type === 'planner' ? 'planner_agent' : 'es_expert_agent'" @blur="checkNameLive">
               <div class="hint">仅英文字母、数字、下划线，以字母开头；作为 Agent 的唯一标识</div>
               <div class="field-feedback" :class="nameStatus">{{ nameMessage }}</div>
+            </div>
+
+            <div class="fr">
+              <label class="fl">分类标签 <span class="required">*</span></label>
+              <el-cascader
+                v-model="form.tags"
+                class="category-cascader"
+                :options="categoryOptions"
+                :props="categoryProps"
+                :disabled="readonly"
+                clearable
+                filterable
+                placeholder="请选择 Agent 分类"
+              />
+              <div class="hint">分类数据来自后端分类表，用于统一归类和筛选 Agent。</div>
             </div>
 
             <div class="fr">
@@ -188,22 +203,6 @@
               </div>
               <div class="hint">当前环境没有 Skill 列表接口时，可手动输入 skill 名；保存时会自动写入 YAML</div>
             </div>
-
-            <div class="divider"></div>
-            <div class="fr">
-              <label class="fl">分类标签 <span class="required">*</span></label>
-              <el-cascader
-                v-model="form.tags"
-                class="category-cascader"
-                :options="categoryOptions"
-                :props="categoryProps"
-                :disabled="readonly"
-                clearable
-                filterable
-                placeholder="请选择 Agent 分类"
-              />
-              <div class="hint">分类数据来自后端分类表，用于统一归类和筛选 Agent。</div>
-            </div>
           </div>
 
           <div v-show="wizardStep === 1" class="wizard-left">
@@ -226,11 +225,15 @@
                 <div class="sum-val">{{ form.role || '-' }}</div>
               </div>
               <div class="sum-cell wide">
+                <div class="sum-lbl">Goal</div>
+                <div class="sum-val">{{ form.goal || '-' }}</div>
+              </div>
+              <div class="sum-cell wide">
                 <div class="sum-lbl">Skills</div>
                 <div class="sum-val">{{ form.skills.length ? form.skills.join(', ') : '-' }}</div>
               </div>
             </div>
-            <div class="warn-box" v-if="!readonly">保存后会生成新的版本记录，激活状态需要在卡片上单独操作。</div>
+            <div class="warn-box" v-if="!readonly">保存后会生成新的版本记录，请在历史版本中激活具体版本。</div>
           </div>
 
           <div class="wizard-right">
@@ -274,9 +277,9 @@
             size="mini"
             type="primary"
             plain
-            :disabled="isVersionActive(version) || !versionTarget || !versionTarget.can_edit"
+            :disabled="isVersionActivationDisabled(version)"
             @click="activateVersion(version)"
-          >激活</el-button>
+          >激活此版本</el-button>
         </div>
         <el-empty v-if="!versions.length" description="暂无历史版本" />
       </div>
@@ -308,7 +311,6 @@
 
 <script>
 import {
-  activateAgent,
   checkAgentName,
   createAgent,
   deactivateAgent,
@@ -378,7 +380,8 @@ export default {
   computed: {
     dialogTitle() {
       if (this.readonly) return '查看 Agent'
-      return this.form.id ? '编辑 Agent' : '新增 Agent'
+      if (this.form.id) return '编辑 Agent'
+      return this.form.copySourceId ? '复制 Agent' : '新增 Agent'
     },
     typeHint() {
       return this.form.type === 'planner'
@@ -406,7 +409,7 @@ export default {
   },
   methods: {
     emptyForm() {
-      return { id: null, agent_name: '', type: 'expert', role: '', goal: '', backstory: '', skills: [], tags: '', content: '' }
+      return { id: null, copySourceId: null, agent_name: '', type: 'expert', role: '', goal: '', backstory: '', skills: [], tags: '', content: '' }
     },
     setFilter(key, value) {
       this.query[key] = value
@@ -424,10 +427,16 @@ export default {
     isVersionActive(version) {
       return version && (version.is_active === true || Number(version.is_active) === 1)
     },
+    isVersionActivationDisabled(version) {
+      if (!this.versionTarget || !this.versionTarget.can_edit) return true
+      return this.versionTarget.status === 'active' && this.isVersionActive(version)
+    },
     versionStateText(version) {
+      if (this.versionTarget && this.versionTarget.status === 'inactive' && this.isVersionActive(version)) return '已停用'
       return this.isVersionActive(version) ? '已生效' : '未生效'
     },
     versionStateClass(version) {
+      if (this.versionTarget && this.versionTarget.status === 'inactive' && this.isVersionActive(version)) return 'inactive'
       return this.isVersionActive(version) ? 'active' : 'inactive'
     },
     scenarioRoleText(role) {
@@ -541,7 +550,7 @@ export default {
       this.$router.replace({ path: this.$route.path, query: {} })
     },
     setAgentType(type) {
-      if (this.form.id || this.readonly) return
+      if (this.form.id || this.form.copySourceId || this.readonly) return
       this.form.type = type
     },
     openCreate() {
@@ -568,6 +577,30 @@ export default {
         type: data.type,
         tags: data.tags || '',
         content: data.content || ''
+      }
+      this.dialogVisible = true
+    },
+    async openCopy(row) {
+      const data = await getAgent(row.id)
+      const content = data.active_content || data.content
+      if (!content) {
+        this.$message.warning('当前 Agent 没有可复制的生效配置')
+        return
+      }
+      this.readonly = false
+      this.wizardStep = 0
+      this.nameStatus = ''
+      this.nameMessage = ''
+      this.newSkill = ''
+      this.form = {
+        ...this.emptyForm(),
+        ...this.parseAgentYaml(content, data.type),
+        id: null,
+        copySourceId: data.id,
+        agent_name: '',
+        type: data.type,
+        tags: data.active_tags || data.tags || '',
+        content
       }
       this.dialogVisible = true
     },
@@ -620,21 +653,14 @@ export default {
     },
     buildAgentYaml(data) {
       const lines = []
-      const goalOp = data.type === 'planner' ? '|' : '>'
       const replacements = {
         name: [`name: ${data.agent_name || ''}`],
         role: [`role: ${data.role || ''}`],
-        goal: [
-          `goal: ${goalOp}`,
-          ...this.toYamlBlock(data.goal).map(line => `  ${line}`)
-        ],
-        backstory: [
-          'backstory: >',
-          ...this.toYamlBlock(data.backstory).map(line => `  ${line}`)
-        ],
+        goal: this.formatYamlValue('goal', data.goal),
+        backstory: this.formatYamlValue('backstory', data.backstory),
         skills: this.buildSkillsYaml(data.skills)
       }
-      if (data.id && data.content) return this.mergeAgentYaml(data.content, replacements)
+      if ((data.id || data.copySourceId) && data.content) return this.mergeAgentYaml(data.content, replacements)
       lines.push(...replacements.name)
       lines.push(...replacements.role)
       lines.push('')
@@ -644,6 +670,12 @@ export default {
       lines.push('')
       lines.push(...replacements.skills)
       return lines.join('\n')
+    },
+    formatYamlValue(key, value) {
+      const text = String(value || '').trimEnd()
+      if (!text) return [`${key}: ""`]
+      if (!text.includes('\n')) return [`${key}: ${text}`]
+      return [`${key}: |`, ...this.toYamlBlock(text).map(line => `  ${line}`)]
     },
     buildSkillsYaml(skills) {
       if (skills && skills.length) return ['skills:', ...skills.map(skill => `  - ${skill}`)]
@@ -757,15 +789,6 @@ export default {
       this.dialogVisible = false
       this.getList()
     },
-    async activate(row) {
-      try {
-        await activateAgent(row.id)
-        this.$message.success(`Agent「${row.agent_name}」已激活`)
-        this.getList()
-      } catch (error) {
-        this.$message.warning(this.agentActionError(error, '激活'))
-      }
-    },
     async deactivate(row) {
       try {
         await deactivateAgent(row.id)
@@ -777,6 +800,7 @@ export default {
     },
     handleMore(command, row) {
       if (command === 'versions') this.openVersions(row)
+      if (command === 'copy') this.openCopy(row)
       if (command === 'delete') this.remove(row)
     },
     async remove(row) {

@@ -51,6 +51,7 @@
               <el-button size="mini">更多<i class="el-icon-arrow-down el-icon--right" /></el-button>
               <el-dropdown-menu slot="dropdown">
                 <el-dropdown-item command="versions">历史版本</el-dropdown-item>
+                <el-dropdown-item command="copy">复制</el-dropdown-item>
                 <el-dropdown-item command="delete" :disabled="!row.can_edit || row.status === 'active'">删除</el-dropdown-item>
               </el-dropdown-menu>
             </el-dropdown>
@@ -328,12 +329,28 @@
         </div>
 
         <div class="fr">
+          <label class="fl">分类标签 <span class="required">*</span></label>
+          <el-cascader
+            v-model="drawerForm.tags"
+            class="category-cascader"
+            :options="categoryOptions"
+            :props="categoryProps"
+            :append-to-body="false"
+            popper-class="agent-drawer-category-popper"
+            clearable
+            filterable
+            placeholder="请选择 Agent 分类"
+          />
+          <div class="hint">分类标签用于 Agent 管理页归类和筛选，保存时会写入分类编码。</div>
+        </div>
+
+        <div class="fr">
           <div class="pick-title-row">
             <label class="fl">Agent 配置 <span class="fkey">YAML</span></label>
             <button type="button" class="mini-action" @click="resetDrawerTemplate">重置模板</button>
           </div>
           <div class="warn-box compact">
-            模板已预填基础结构，可直接修改 role、goal、backstory。Skills 可在下方关联，也可后续在 Agent 编辑页补充。
+            模板已预填基础结构。标准格式：顶层包含 name、role、goal、backstory、skills；Skills 可在下方关联，也可后续在 Agent 编辑页补充。
           </div>
           <div class="field-doc">
             <div><code>role</code><span>角色身份，注入到 LLM 系统提示词。</span></div>
@@ -385,6 +402,7 @@ import {
   deactivateScenario,
   deleteScenario,
   getScenario,
+  listAgentCategories,
   listAgents,
   listScenarios,
   listScenarioVersions,
@@ -401,6 +419,14 @@ export default {
       loading: false,
       rows: [],
       agents: [],
+      categoryOptions: [],
+      categoryProps: {
+        value: 'value',
+        label: 'label',
+        children: 'children',
+        emitPath: false,
+        checkStrictly: true
+      },
       query: { scope: 'mine', status: '' },
       statusFilters: [
         { label: '全部', value: '' },
@@ -439,7 +465,8 @@ export default {
     },
     dialogTitle() {
       if (this.readonly) return '查看场景'
-      return this.form.id ? '编辑场景' : '新增场景'
+      if (this.form.id) return '编辑场景'
+      return this.form.copySourceId ? '复制场景' : '新增场景'
     },
     drawerTitle() {
       return this.drawerForm.type === 'planner' ? '新建 Planner Agent' : '新建 Expert Agent'
@@ -483,6 +510,7 @@ export default {
     emptyForm() {
       return {
         id: null,
+        copySourceId: null,
         scenario_name: '',
         description: '',
         sub_type_hint: '',
@@ -493,7 +521,7 @@ export default {
       }
     },
     emptyDrawerForm(type) {
-      return { type, agent_name: '', content: this.agentTemplate(type), skills: [] }
+      return { type, agent_name: '', content: this.agentTemplate(type), skills: [], tags: '' }
     },
     setFilter(key, value) {
       this.query[key] = value
@@ -502,6 +530,7 @@ export default {
     refreshAll() {
       this.getList()
       this.loadAgents()
+      this.loadCategories()
     },
     statusText(status) {
       return ({ draft: '草稿', active: '已激活', inactive: '已停用' })[status] || status
@@ -566,6 +595,9 @@ export default {
     async loadAgents() {
       this.agents = await listAgents({ scope: 'all' })
     },
+    async loadCategories() {
+      this.categoryOptions = await listAgentCategories()
+    },
     extractErrorMessage(error) {
       const data = error && error.response && error.response.data
       return (data && (data.detail || data.msg || data.message)) || (error && error.message) || ''
@@ -621,6 +653,31 @@ export default {
       this.form = {
         ...this.emptyForm(),
         ...data,
+        skill_selector_dims: this.parseJson(data.skill_selector_dims, []),
+        planner: related.planner || '',
+        experts: (related.experts || []).filter(item => item.enabled !== false).map(item => item.name)
+      }
+      this.dialogVisible = true
+    },
+    async openCopy(row) {
+      const data = await getScenario(row.id)
+      const related = this.parseJson(data.related_agents, null)
+      if (!related || typeof related !== 'object') {
+        this.$message.warning('当前场景配置无法复制')
+        return
+      }
+      this.readonly = false
+      this.wizardStep = 0
+      this.nameStatus = ''
+      this.nameMessage = ''
+      this.form = {
+        ...this.emptyForm(),
+        id: null,
+        copySourceId: data.id,
+        scenario_name: '',
+        description: data.description || '',
+        sub_type_hint: data.sub_type_hint || '',
+        keyword_hint: data.keyword_hint || '',
         skill_selector_dims: this.parseJson(data.skill_selector_dims, []),
         planner: related.planner || '',
         experts: (related.experts || []).filter(item => item.enabled !== false).map(item => item.name)
@@ -761,7 +818,15 @@ export default {
       if (inactive.length) this.$message.warning(this.inactiveAgentTip(inactive))
       this.getList()
     },
-    openAgentDrawer(type) {
+    async openAgentDrawer(type) {
+      if (!this.categoryOptions.length) {
+        try {
+          await this.loadCategories()
+        } catch (e) {
+          this.$message.warning('分类数据加载失败，请稍后重试')
+          return
+        }
+      }
       this.drawerForm = this.emptyDrawerForm(type)
       this.drawerSkillInput = ''
       this.drawerNameStatus = ''
@@ -788,9 +853,9 @@ export default {
       return [
         'name: ',
         'role: 专家',
-        'goal: >',
+        'goal: |',
         '  负责分析指定领域的问题，提供详细的诊断结果和修复建议。',
-        'backstory: >',
+        'backstory: |',
         '  你是一位领域专家，擅长快速定位问题根因，提供准确的技术分析。',
         'skills: []',
         ''
@@ -874,6 +939,10 @@ export default {
         this.$message.warning('Agent 名称格式不正确')
         return
       }
+      if (!this.drawerForm.tags) {
+        this.$message.warning('请填写分类标签')
+        return
+      }
       const result = await checkAgentName(this.drawerForm.agent_name).catch(() => ({ available: true }))
       if (!result.available) {
         this.$message.warning(result.message || 'Agent 名称已存在')
@@ -883,7 +952,7 @@ export default {
         agent_name: this.drawerForm.agent_name,
         type: this.drawerForm.type,
         content: this.drawerForm.content,
-        tags: '自定义'
+        tags: this.drawerForm.tags
       })
       this.$message.success(`Agent「${this.drawerForm.agent_name}」已创建`)
       await this.loadAgents()
@@ -917,6 +986,7 @@ export default {
     },
     handleMore(command, row) {
       if (command === 'versions') this.openVersions(row)
+      if (command === 'copy') this.openCopy(row)
       if (command === 'delete') this.remove(row)
     },
     async remove(row) {
@@ -1238,6 +1308,7 @@ label.fl {
 }
 .fkey { margin-left: 3px; font-family: Consolas, Monaco, monospace; font-size: 10px; color: #64748b; }
 .fopt { font-size: 10px; color: #94a3b8; }
+.required { color: var(--am-red); }
 .fr input,
 .fr textarea {
   display: block;
@@ -1256,6 +1327,20 @@ label.fl {
 .fr input:focus, .fr textarea:focus {
   border-color: var(--am-primary);
   box-shadow: 0 0 0 2px rgba(37, 99, 235, .08);
+}
+.category-cascader {
+  display: block;
+  width: 100%;
+}
+::v-deep .category-cascader .el-input__inner {
+  height: 34px;
+  line-height: 34px;
+  border-radius: 7px;
+  border-color: #cbd5e1;
+  font-size: 12px;
+}
+::v-deep .agent-drawer-category-popper {
+  z-index: 2;
 }
 .hint { margin-top: 5px; font-size: 10px; line-height: 1.5; color: var(--am-text2); }
 .field-feedback { min-height: 16px; margin-top: 4px; font-size: 10px; }

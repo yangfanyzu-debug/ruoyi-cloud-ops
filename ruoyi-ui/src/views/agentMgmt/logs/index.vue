@@ -43,23 +43,31 @@
     </div>
 
     <div v-loading="loading" class="am-scroll">
-      <div v-if="rows.length" class="log-list">
-        <div v-for="row in rows" :key="row.id" class="log-card">
-          <div class="log-main">
-            <div class="log-head">
-              <span class="log-scenario">{{ row.scenario_name || '-' }}</span>
-              <span class="log-id">#{{ row.id }}</span>
-            </div>
-            <div class="log-name">{{ row.log_name || '未命名日志' }}</div>
-            <div class="log-meta">
-              <span>系统 <strong>{{ extra(row).system_id || '-' }}</strong></span>
-              <span>告警 <strong>{{ extra(row).alert_key || '-' }}</strong></span>
-              <span>{{ row.created_at || '-' }}</span>
-            </div>
-          </div>
-          <el-button size="mini" @click="openHtml(row)">查看详情</el-button>
-        </div>
-      </div>
+      <el-table v-if="rows.length" :data="rows" size="mini" border class="log-table">
+        <el-table-column prop="created_at" label="时间" width="160" />
+        <el-table-column prop="scenario_name" label="场景" min-width="130" show-overflow-tooltip />
+        <el-table-column prop="log_name" label="日志名称" min-width="180" show-overflow-tooltip>
+          <template slot-scope="{ row }">{{ row.log_name || '未命名日志' }}</template>
+        </el-table-column>
+        <el-table-column label="系统" width="120">
+          <template slot-scope="{ row }">{{ extra(row).system_id || '-' }}</template>
+        </el-table-column>
+        <el-table-column label="告警" width="130">
+          <template slot-scope="{ row }">{{ extra(row).alert_key || '-' }}</template>
+        </el-table-column>
+        <el-table-column prop="run_id" label="run_id" width="190" show-overflow-tooltip>
+          <template slot-scope="{ row }">
+            <el-button v-if="row.run_id" type="text" class="mono-link" @click="openHtmlByRun(row.run_id)">{{ row.run_id }}</el-button>
+            <span v-else>-</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="remark" label="备注" min-width="120" show-overflow-tooltip />
+        <el-table-column label="操作" width="96" fixed="right">
+          <template slot-scope="{ row }">
+            <el-button size="mini" type="text" @click="openHtml(row)">查看详情</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
       <el-empty v-else description="暂无执行日志数据" />
     </div>
 
@@ -74,7 +82,7 @@
 </template>
 
 <script>
-import { getLogHtml, listLogs, listScenarios } from '@/api/agentMgmt'
+import { getLogHtml, getLogHtmlByRun, listLogs, listScenarios } from '@/api/agentMgmt'
 
 export default {
   name: 'AgentMgmtLogs',
@@ -122,31 +130,55 @@ export default {
     },
     extra(row) {
       try {
-        return row.extra_data ? JSON.parse(row.extra_data) : {}
+        if (!row.extra_data) return {}
+        return typeof row.extra_data === 'string' ? JSON.parse(row.extra_data) : row.extra_data
       } catch (e) {
         return {}
       }
     },
-    async openHtml(row) {
+    openHtmlTab(title) {
       const tab = window.open('', '_blank')
       if (!tab) {
         this.$message.warning('浏览器拦截了新窗口，请允许弹窗后重试')
-        return
+        return null
       }
 
       tab.opener = null
-      tab.document.write('<!doctype html><html><head><meta charset="utf-8"><title>日志详情加载中</title></head><body style="margin:0;padding:16px;font-family:Arial,Helvetica,sans-serif;color:#334155;">报告加载中...</body></html>')
+      tab.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${title}</title></head><body style="margin:0;padding:16px;font-family:Arial,Helvetica,sans-serif;color:#334155;">报告加载中...</body></html>`)
       tab.document.close()
+      return tab
+    },
+    writeHtmlTab(tab, html) {
+      tab.document.open()
+      tab.document.write(html)
+      tab.document.close()
+    },
+    writeHtmlError(tab) {
+      tab.document.open()
+      tab.document.write('<!doctype html><html><head><meta charset="utf-8"><title>日志详情加载失败</title></head><body style="margin:0;padding:16px;font-family:Arial,Helvetica,sans-serif;color:#b91c1c;">报告加载失败，请稍后重试。</body></html>')
+      tab.document.close()
+    },
+    async openHtml(row) {
+      const tab = this.openHtmlTab('日志详情加载中')
+      if (!tab) return
 
       try {
         const html = await getLogHtml(row.id)
-        tab.document.open()
-        tab.document.write(html)
-        tab.document.close()
+        this.writeHtmlTab(tab, html)
       } catch (e) {
-        tab.document.open()
-        tab.document.write('<!doctype html><html><head><meta charset="utf-8"><title>日志详情加载失败</title></head><body style="margin:0;padding:16px;font-family:Arial,Helvetica,sans-serif;color:#b91c1c;">报告加载失败，请稍后重试。</body></html>')
-        tab.document.close()
+        this.writeHtmlError(tab)
+      }
+    },
+    async openHtmlByRun(runId) {
+      if (!runId) return
+      const tab = this.openHtmlTab('日志详情加载中')
+      if (!tab) return
+
+      try {
+        const html = await getLogHtmlByRun(runId)
+        this.writeHtmlTab(tab, html)
+      } catch (e) {
+        this.writeHtmlError(tab)
       }
     }
   }
@@ -211,76 +243,14 @@ export default {
   min-height: 260px;
   padding-top: 14px;
 }
-.log-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+.log-table {
+  width: 100%;
 }
-.log-card {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  padding: 12px 14px;
-  border: 1px solid var(--am-border);
-  border-radius: 8px;
-  background: var(--am-bg);
-  transition: border-color .15s, box-shadow .15s;
-}
-.log-card:hover {
-  border-color: var(--am-border2);
-  box-shadow: 0 8px 20px rgba(15, 23, 42, .04);
-}
-.log-main {
-  min-width: 0;
-}
-.log-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 5px;
-}
-.log-scenario {
+.mono-link {
   font-family: Consolas, Monaco, monospace;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--am-text);
-}
-.log-id {
-  padding: 2px 7px;
-  border-radius: 8px;
-  font-size: 10px;
-  color: #475569;
-  background: #f1f5f9;
-}
-.log-name {
-  margin-bottom: 7px;
-  font-size: 12px;
-  color: var(--am-text2);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.log-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.log-meta span {
-  padding: 3px 7px;
-  border-radius: 8px;
-  background: var(--am-bg2);
-  font-size: 10px;
-  color: var(--am-text2);
-}
-.log-meta strong {
-  font-family: Consolas, Monaco, monospace;
-  font-weight: 500;
-  color: var(--am-text);
 }
 @media (max-width: 768px) {
-  .am-topbar,
-  .log-card {
+  .am-topbar {
     align-items: flex-start;
     flex-direction: column;
   }
