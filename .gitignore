@@ -8,6 +8,15 @@
 target/
 !.mvn/wrapper/maven-wrapper.jar
 
+# Java
+*.jar
+*.war
+*.ear
+*.class
+
+# Maven
+dependency-reduced-pom.xml
+
 ######################################################################
 # IDE
 
@@ -25,28 +34,57 @@ target/
 *.iml
 *.ipr
 
+### VS Code ###
+.vscode/
+
 ### JRebel ###
 rebel.xml
+
 ### NetBeans ###
 nbproject/private/
-build/*
 nbbuild/
 dist/
 nbdist/
 .nb-gradle/
 
 ######################################################################
-# Others
+# AI / Code Assistants
+
+.claude/
+.codegraph/
+.mcp.json
+
+######################################################################
+# Logs & Runtime
+
 *.log
+logs/
+nohup.out
+*.pid
+
+######################################################################
+# Archives
 *.zip
 *.tar
 *.tar.gz
 *.tgz
-*.xml.versionsBackup
-*.swp
+
+######################################################################
+# OS Files
 
 .DS_Store
-.codegraph/
+.AppleDouble
+.LSOverride
+._*
+Thumbs.db
+ehthumbs.db
+
+######################################################################
+# Misc
+*.xml.versionsBackup
+*.swp
+*.swp
+*~
 
 !*/build/*.java
 !*/build/*.html
