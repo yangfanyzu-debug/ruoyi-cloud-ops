@@ -81,12 +81,12 @@
               </div>
               <div class="meta-grid">
                 <div>
-                  <span>生效版本</span>
+                  <span>激活版本</span>
                   <strong>{{ effectiveVersion(row) }}</strong>
                 </div>
                 <div>
-                  <span>最新版本</span>
-                  <strong>{{ row.version || '-' }}</strong>
+                  <span>待激活版本</span>
+                  <strong>{{ pendingVersion(row) }}</strong>
                 </div>
                 <div>
                   <span>更新</span>
@@ -233,7 +233,7 @@
                 <div class="sum-val">{{ form.skills.length ? form.skills.join(', ') : '-' }}</div>
               </div>
             </div>
-            <div class="warn-box" v-if="!readonly">保存后会生成新的版本记录，请在历史版本中激活具体版本。</div>
+            <div class="warn-box" v-if="!readonly">保存后会生成新的版本记录，请在历史版本中激活目标版本。</div>
           </div>
 
           <div class="wizard-right">
@@ -268,7 +268,7 @@
         <div v-for="version in versions" :key="version.id" class="version-card">
           <div class="version-main">
             <div class="version-title">
-              <span>{{ version.version }}</span>
+              <span :title="version.version">{{ displayVersion(version.version) }}</span>
               <span class="version-state" :class="versionStateClass(version)">{{ versionStateText(version) }}</span>
             </div>
             <div class="version-meta">{{ version.created_by_username || '-' }} · {{ version.created_at || '-' }}</div>
@@ -289,7 +289,7 @@
       <div v-if="relatedTarget" class="related-head">
         <div>
           <div class="related-name">{{ relatedTarget.agent_name }}</div>
-          <div class="related-sub">当前 Agent 被以下场景引用，版本激活后这些场景会实时使用新的生效配置。</div>
+          <div class="related-sub">当前 Agent 被以下场景引用，版本激活后这些场景会实时使用新的激活配置。</div>
         </div>
         <span class="related-count">{{ relatedScenarios.length }} 个场景</span>
       </div>
@@ -337,7 +337,7 @@ export default {
       statusFilters: [
         { label: '全部', value: '' },
         { label: '草稿', value: 'draft' },
-        { label: '已激活', value: 'active' },
+        { label: '可用', value: 'active' },
         { label: '已停用', value: 'inactive' }
       ],
       typeFilters: [
@@ -416,13 +416,23 @@ export default {
       this.getList()
     },
     statusText(status) {
-      return ({ draft: '草稿', active: '已激活', inactive: '已停用' })[status] || status
+      return ({ draft: '草稿', active: '可用', inactive: '已停用' })[status] || status
     },
     typeText(type) {
       return type === 'planner' ? 'Planner' : 'Expert'
     },
     effectiveVersion(row) {
-      return row.active_version || row.version || '-'
+      if (row.status !== 'active') return '无'
+      return this.displayVersion(row.active_version || row.version || '-')
+    },
+    pendingVersion(row) {
+      if (!row.version) return '-'
+      if (row.status === 'active' && (row.active_version || row.version) === row.version) return '无'
+      return this.displayVersion(row.version)
+    },
+    displayVersion(version) {
+      const text = String(version || '-')
+      return /^v\d+\./.test(text) ? text.split('.', 1)[0] : text
     },
     isVersionActive(version) {
       return version && (version.is_active === true || Number(version.is_active) === 1)
@@ -433,11 +443,11 @@ export default {
     },
     versionStateText(version) {
       if (this.versionTarget && this.versionTarget.status === 'inactive' && this.isVersionActive(version)) return '已停用'
-      return this.isVersionActive(version) ? '已生效' : '未生效'
+      return this.versionTarget && this.versionTarget.status === 'active' && this.isVersionActive(version) ? '已激活' : '未激活'
     },
     versionStateClass(version) {
       if (this.versionTarget && this.versionTarget.status === 'inactive' && this.isVersionActive(version)) return 'inactive'
-      return this.isVersionActive(version) ? 'active' : 'inactive'
+      return this.versionTarget && this.versionTarget.status === 'active' && this.isVersionActive(version) ? 'active' : 'inactive'
     },
     scenarioRoleText(role) {
       return role === 'planner' ? 'Planner' : 'Expert'
@@ -584,7 +594,7 @@ export default {
       const data = await getAgent(row.id)
       const content = data.active_content || data.content
       if (!content) {
-        this.$message.warning('当前 Agent 没有可复制的生效配置')
+        this.$message.warning('当前 Agent 没有可复制的激活配置')
         return
       }
       this.readonly = false
@@ -624,31 +634,50 @@ export default {
     },
     parseAgentYaml(content, fallbackType = 'expert') {
       const raw = String(content || '')
-      const get = key => {
-        const match = raw.match(new RegExp(`^${key}:[ \\t]*([^\\r\\n]*)`, 'm'))
-        return match ? this.cleanYamlFieldValue(match[1]) : ''
-      }
-      const getBlock = key => {
-        const match = raw.match(new RegExp(`^${key}:[ \\t]*(?:[|>]|&gt;|&vert;)-?\\n((?:[ \\t]+.*\\n?)*)`, 'm'))
-        return match ? this.cleanYamlFieldValue(match[1].replace(/^[ \t]{2}/gm, '').trimEnd()) : null
-      }
+      const get = key => this.readYamlField(raw, key)
       const skillBlock = raw.match(/^skills:\s*\n((?:[ \t]+-[ \t]+.+\n?)*)/m)
       const skills = skillBlock ? skillBlock[1].split('\n').map(line => line.replace(/^\s*-\s*/, '').trim()).filter(Boolean) : []
       const detectedType = get('type') || (raw.toLowerCase().includes('planner') ? 'planner' : fallbackType)
-      const goalBlock = getBlock('goal')
-      const backstoryBlock = getBlock('backstory')
       return {
         agent_name: get('name'),
         type: detectedType === 'planner' ? 'planner' : 'expert',
         role: get('role'),
-        goal: goalBlock !== null ? goalBlock : get('goal'),
-        backstory: backstoryBlock !== null ? backstoryBlock : get('backstory'),
+        goal: this.readYamlField(raw, 'goal'),
+        backstory: this.readYamlField(raw, 'backstory'),
         skills
       }
     },
+    readYamlField(raw, key) {
+      const lines = String(raw || '').replace(/\r\n/g, '\n').split('\n')
+      const keyRe = new RegExp(`^${key}:[ \\t]*(.*)$`)
+      for (let index = 0; index < lines.length; index += 1) {
+        const match = lines[index].match(keyRe)
+        if (!match) continue
+        const inline = this.cleanYamlFieldValue(match[1])
+        if (inline) return inline
+        const block = this.readIndentedYamlBlock(lines, index + 1)
+        return this.cleanYamlFieldValue(block.lines.join('\n'))
+      }
+      return ''
+    },
+    readIndentedYamlBlock(lines, startIndex) {
+      const block = []
+      for (let index = startIndex; index < lines.length; index += 1) {
+        const line = lines[index]
+        if (line.match(/^([A-Za-z_][A-Za-z0-9_-]*):/)) break
+        if (!line.trim()) {
+          if (block.length) block.push('')
+          continue
+        }
+        if (!/^[ \t]+/.test(line)) break
+        block.push(line.replace(/^[ \t]{2}/, ''))
+      }
+      while (block.length && !block[block.length - 1].trim()) block.pop()
+      return { lines: block }
+    },
     cleanYamlFieldValue(value) {
       const text = String(value || '').trim()
-      if (['>', '|', '&gt;', '&vert;'].includes(text)) return ''
+      if (['>', '|', '｜', '&gt;', '&vert;'].includes(text)) return ''
       return text
     },
     buildAgentYaml(data) {
@@ -824,12 +853,12 @@ export default {
       const scenarioNames = scenarios.map(item => item.scenario_name).filter(Boolean)
       const sceneText = scenarioNames.length ? scenarioNames.join('、') : '暂无关联场景'
       await this.$confirm(
-        `确认激活 ${version.version}？该 Agent 关联的场景会实时生效：${sceneText}`,
+        `确认激活 ${this.displayVersion(version.version)}？该 Agent 关联的场景会实时使用该配置：${sceneText}`,
         '激活版本',
         { type: 'warning' }
       )
       await activateAgentVersion(this.versionTarget.id, version.id)
-      this.$message.success(`Agent 已激活 ${version.version}`)
+      this.$message.success(`Agent 已激活版本 ${version.version}`)
       this.versions = await listAgentVersions(this.versionTarget.id)
       this.versionVisible = false
       this.getList()

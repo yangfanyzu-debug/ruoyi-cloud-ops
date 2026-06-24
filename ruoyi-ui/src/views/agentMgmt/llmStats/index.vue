@@ -30,7 +30,7 @@
               <span>成功率</span>
               <strong :class="successRateClass">{{ summary.success_rate || '0%' }}</strong>
             </button>
-            <button type="button" class="stat-card clickable" @click="scrollToFailures">
+            <button type="button" class="stat-card clickable" @click="openFailuresTab">
               <span>失败数</span>
               <strong class="danger">{{ summary.total_failures || 0 }}</strong>
             </button>
@@ -95,24 +95,6 @@
             </section>
           </div>
 
-          <section ref="failuresSection" class="fail-section">
-            <div class="section-title">最近失败记录</div>
-            <el-table v-if="failures.length" :data="failures" size="mini" border :max-height="failureTableHeight">
-              <el-table-column prop="created_at" label="时间" width="160" />
-              <el-table-column prop="scenario_name" label="场景" min-width="130" />
-              <el-table-column prop="agent_role" label="角色" min-width="130" />
-              <el-table-column prop="model" label="模型" width="130" />
-              <el-table-column prop="retry_count" label="重试" width="70" />
-              <el-table-column prop="error_type" label="错误类型" width="100" />
-              <el-table-column prop="error_msg" label="错误信息" min-width="220" show-overflow-tooltip />
-              <el-table-column label="run_id" width="190">
-                <template slot-scope="{ row }">
-                  <el-button type="text" class="mono-link" @click="openRunDrawer(row.run_id)">{{ row.run_id }}</el-button>
-                </template>
-              </el-table-column>
-            </el-table>
-            <el-empty v-else description="无失败记录" />
-          </section>
         </div>
       </el-tab-pane>
 
@@ -126,7 +108,7 @@
             <el-option v-for="name in scenarioNames" :key="name" :label="name" :value="name" />
           </el-select>
           <el-input v-model.trim="scenarioQuery.keyword" size="mini" clearable placeholder="告警单号 / 系统ID" @keyup.enter.native="searchScenario" />
-          <el-input v-model.trim="runIdQuery" size="mini" clearable class="run-input" placeholder="精确查询 run_id" @keyup.enter.native="openRunDrawer(runIdQuery)" />
+          <el-input v-model.trim="runIdQuery" size="mini" clearable class="run-input" placeholder="精确查询 run_id" @keyup.enter.native="searchScenario" />
           <el-button size="mini" type="primary" icon="el-icon-search" @click="searchScenario">查询</el-button>
         </div>
         <div v-loading="scenarioLoading" class="am-scroll scenario-scroll">
@@ -192,6 +174,49 @@
           />
         </div>
       </el-tab-pane>
+
+      <el-tab-pane label="最近失败记录" name="failures">
+        <div class="filterbar failure-filterbar">
+          <el-input v-model.trim="failureQuery.scenario_name" size="mini" clearable placeholder="场景名称" @keyup.enter.native="searchFailures" />
+          <el-select v-model="failureQuery.error_type" size="mini" clearable placeholder="错误类型" @change="searchFailures">
+            <el-option label="rate_limit" value="rate_limit" />
+            <el-option label="network" value="network" />
+            <el-option label="other" value="other" />
+          </el-select>
+          <el-input v-model.trim="failureQuery.keyword" size="mini" clearable placeholder="run_id / 角色 / 模型 / 错误信息" @keyup.enter.native="searchFailures" />
+          <el-button size="mini" type="primary" icon="el-icon-search" @click="searchFailures">查询</el-button>
+        </div>
+        <div v-loading="failureLoading" class="am-scroll failure-scroll">
+          <div v-if="failureError" class="error-text">{{ failureError }}</div>
+          <el-table v-if="failures.length" :data="failures" size="mini" border :height="failureRecordTableHeight">
+            <el-table-column prop="created_at" label="时间" width="150" />
+            <el-table-column prop="scenario_name" label="场景" width="150" show-overflow-tooltip />
+            <el-table-column prop="agent_role" label="角色" width="150" show-overflow-tooltip />
+            <el-table-column prop="model" label="模型" width="130" />
+            <el-table-column prop="retry_count" label="重试" width="70" />
+            <el-table-column prop="error_type" label="错误类型" width="110" />
+            <el-table-column prop="error_msg" label="错误信息" min-width="260" show-overflow-tooltip />
+            <el-table-column label="run_id" width="190">
+              <template slot-scope="{ row }">
+                <el-button type="text" class="mono-link" @click="openRunDrawer(row.run_id)">{{ row.run_id }}</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+          <el-empty v-else description="无失败记录" />
+          <el-pagination
+            v-if="failureTotal > 0"
+            class="failure-pagination"
+            background
+            layout="total, sizes, prev, pager, next, jumper"
+            :current-page="failurePage"
+            :page-size="failurePageSize"
+            :page-sizes="[20, 50, 100]"
+            :total="failureTotal"
+            @current-change="handleFailurePageChange"
+            @size-change="handleFailureSizeChange"
+          />
+        </div>
+      </el-tab-pane>
     </el-tabs>
 
     <el-drawer :visible.sync="drawerVisible" size="min(1180px, 92%)" custom-class="llm-drawer" :title="drawerTitle">
@@ -250,9 +275,11 @@ export default {
       activeTab: 'overall',
       overallLoading: false,
       scenarioLoading: false,
+      failureLoading: false,
       drawerLoading: false,
       overallError: '',
       scenarioError: '',
+      failureError: '',
       drawerError: '',
       summary: {
         total_calls: 0,
@@ -263,6 +290,10 @@ export default {
         by_role: {}
       },
       failures: [],
+      failureTotal: 0,
+      failurePage: 1,
+      failurePageSize: 20,
+      failureQuery: { scenario_name: '', error_type: '', keyword: '' },
       scenarioRows: [],
       scenarioTotal: 0,
       scenarioPage: 1,
@@ -297,8 +328,8 @@ export default {
     overallTableHeight() {
       return 240
     },
-    failureTableHeight() {
-      return 260
+    failureRecordTableHeight() {
+      return 'calc(100vh - 390px)'
     },
     scenarioTableHeight() {
       return 'calc(100vh - 390px)'
@@ -322,7 +353,8 @@ export default {
     },
     refreshCurrent() {
       if (this.activeTab === 'overall') this.loadOverall()
-      else this.searchScenario()
+      else if (this.activeTab === 'scenario') this.searchScenario()
+      else this.searchFailures()
     },
     onTabChange() {
       this.refreshCurrent()
@@ -331,12 +363,8 @@ export default {
       this.overallLoading = true
       this.overallError = ''
       try {
-        const [summary, failures] = await Promise.all([
-          getLlmStatsSummary({ days: this.days }),
-          listLlmStatsFailures({ days: this.days, page: 1, page_size: 50 })
-        ])
+        const summary = await getLlmStatsSummary({ days: this.days })
         this.summary = summary || this.summary
-        this.failures = failures && failures.items ? failures.items : []
       } catch (e) {
         this.overallError = this.errorText(e)
       } finally {
@@ -352,6 +380,7 @@ export default {
           only_failures: this.scenarioQuery.onlyFailures,
           scenario_name: this.scenarioQuery.scenario_name,
           keyword: this.scenarioQuery.keyword,
+          run_id: this.runIdQuery,
           page: this.scenarioPage,
           page_size: this.scenarioPageSize
         })
@@ -377,6 +406,43 @@ export default {
       this.scenarioPageSize = size
       this.scenarioPage = 1
       this.loadScenario()
+    },
+    async loadFailures() {
+      this.failureLoading = true
+      this.failureError = ''
+      try {
+        const result = await listLlmStatsFailures({
+          days: this.days,
+          page: this.failurePage,
+          page_size: this.failurePageSize,
+          scenario_name: this.failureQuery.scenario_name,
+          error_type: this.failureQuery.error_type,
+          keyword: this.failureQuery.keyword
+        })
+        this.failures = result && result.items ? result.items : []
+        this.failureTotal = result && result.total ? result.total : 0
+      } catch (e) {
+        this.failureError = this.errorText(e)
+      } finally {
+        this.failureLoading = false
+      }
+    },
+    searchFailures() {
+      this.failurePage = 1
+      this.loadFailures()
+    },
+    handleFailurePageChange(page) {
+      this.failurePage = page
+      this.loadFailures()
+    },
+    handleFailureSizeChange(size) {
+      this.failurePageSize = size
+      this.failurePage = 1
+      this.loadFailures()
+    },
+    openFailuresTab() {
+      this.activeTab = 'failures'
+      this.searchFailures()
     },
     async openRunDrawer(runId) {
       if (!runId) return
@@ -427,11 +493,7 @@ export default {
         this.writeHtmlError(tab)
       }
     },
-    scrollToFailures() {
-      if (this.$refs.failuresSection) {
-        this.$refs.failuresSection.scrollIntoView({ behavior: 'smooth', block: 'start' })
-      }
-    },
+
     formatLatency(value) {
       if (value === null || value === undefined || value === '') return '-'
       const ms = Number(value) || 0
@@ -505,7 +567,8 @@ export default {
   padding-top: 10px;
 }
 
-.scenario-scroll {
+.scenario-scroll,
+.failure-scroll {
   min-height: calc(100vh - 330px);
 }
 
@@ -562,11 +625,8 @@ export default {
   font-weight: 700;
 }
 
-.fail-section {
-  margin-top: 18px;
-}
-
-.scenario-pagination {
+.scenario-pagination,
+.failure-pagination {
   display: flex;
   justify-content: flex-end;
   padding: 12px 0 0;
@@ -578,6 +638,10 @@ export default {
   gap: 8px;
   align-items: center;
   padding: 12px 0;
+}
+
+.failure-filterbar {
+  grid-template-columns: minmax(150px, 210px) minmax(120px, 150px) minmax(260px, 1fr) 76px;
 }
 
 .filter-small {

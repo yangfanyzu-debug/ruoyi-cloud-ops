@@ -36,32 +36,39 @@
         <span>告警</span>
         <el-input v-model="query.alert_key" size="mini" clearable placeholder="alertKey" @keyup.enter.native="search" />
       </label>
+      <label>
+        <span>告警源</span>
+        <el-input v-model="query.alert_source" size="mini" clearable placeholder="alertSource" @keyup.enter.native="search" />
+      </label>
       <div class="filter-actions">
         <el-button size="mini" type="primary" icon="el-icon-search" @click="search">查询</el-button>
         <el-button size="mini" icon="el-icon-refresh-left" @click="reset">重置</el-button>
       </div>
     </div>
 
-    <div v-loading="loading" class="am-scroll">
-      <el-table v-if="rows.length" :data="rows" size="mini" border class="log-table">
-        <el-table-column prop="created_at" label="时间" width="160" />
+    <div v-loading="loading" class="am-scroll log-table-wrap">
+      <el-table v-if="rows.length" :data="rows" size="mini" border class="log-table" :height="logTableHeight">
+        <el-table-column prop="id" label="ID" width="76" />
         <el-table-column prop="scenario_name" label="场景" min-width="130" show-overflow-tooltip />
-        <el-table-column prop="log_name" label="日志名称" min-width="180" show-overflow-tooltip>
-          <template slot-scope="{ row }">{{ row.log_name || '未命名日志' }}</template>
-        </el-table-column>
         <el-table-column label="系统" width="120">
           <template slot-scope="{ row }">{{ extra(row).system_id || '-' }}</template>
         </el-table-column>
         <el-table-column label="告警" width="130">
           <template slot-scope="{ row }">{{ extra(row).alert_key || '-' }}</template>
         </el-table-column>
-        <el-table-column prop="run_id" label="run_id" width="190" show-overflow-tooltip>
+        <el-table-column label="告警源" width="120">
+          <template slot-scope="{ row }">{{ extra(row).alert_source || '-' }}</template>
+        </el-table-column>
+        <el-table-column prop="created_at" label="生成时间" width="160" />
+        <el-table-column prop="run_id" label="runid" width="190" show-overflow-tooltip>
           <template slot-scope="{ row }">
             <el-button v-if="row.run_id" type="text" class="mono-link" @click="openHtmlByRun(row.run_id)">{{ row.run_id }}</el-button>
             <span v-else>-</span>
           </template>
         </el-table-column>
-        <el-table-column prop="remark" label="备注" min-width="120" show-overflow-tooltip />
+        <el-table-column prop="log_name" label="日志名称" min-width="180" show-overflow-tooltip>
+          <template slot-scope="{ row }">{{ row.log_name || '未命名日志' }}</template>
+        </el-table-column>
         <el-table-column label="操作" width="96" fixed="right">
           <template slot-scope="{ row }">
             <el-button size="mini" type="text" @click="openHtml(row)">查看详情</el-button>
@@ -69,15 +76,15 @@
         </el-table-column>
       </el-table>
       <el-empty v-else description="暂无执行日志数据" />
+      <pagination
+        v-show="total > 0"
+        class="log-pagination"
+        :total="total"
+        :page.sync="query.page"
+        :limit.sync="query.page_size"
+        @pagination="getList"
+      />
     </div>
-
-    <pagination
-      v-show="total > 0"
-      :total="total"
-      :page.sync="query.page"
-      :limit.sync="query.page_size"
-      @pagination="getList"
-    />
   </div>
 </template>
 
@@ -93,12 +100,17 @@ export default {
       scenarioOptions: [],
       rows: [],
       total: 0,
-      query: { page: 1, page_size: 20, scenario_name: '', system_id: '', alert_key: '' }
+      query: { page: 1, page_size: 20, scenario_name: '', system_id: '', alert_key: '', alert_source: '' }
     }
   },
   created() {
     this.loadScenarioOptions()
     this.getList()
+  },
+  computed: {
+    logTableHeight() {
+      return 'calc(100vh - 335px)'
+    }
   },
   methods: {
     async loadScenarioOptions() {
@@ -125,7 +137,7 @@ export default {
       this.getList()
     },
     reset() {
-      this.query = { page: 1, page_size: 20, scenario_name: '', system_id: '', alert_key: '' }
+      this.query = { page: 1, page_size: 20, scenario_name: '', system_id: '', alert_key: '', alert_source: '' }
       this.getList()
     },
     extra(row) {
@@ -243,8 +255,16 @@ export default {
   min-height: 260px;
   padding-top: 14px;
 }
+.log-table-wrap {
+  min-height: calc(100vh - 270px);
+}
 .log-table {
   width: 100%;
+}
+.log-pagination {
+  display: flex;
+  justify-content: flex-end;
+  padding: 12px 0 0;
 }
 .mono-link {
   font-family: Consolas, Monaco, monospace;

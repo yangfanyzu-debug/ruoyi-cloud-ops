@@ -572,7 +572,8 @@ export default {
       return []
     },
     agentRole(agent) {
-      return this.parseYamlField(agent.content, 'role') || this.summarizeText(agent.content || agent.tags) || '-'
+      const content = this.agentRuntimeContent(agent)
+      return this.parseYamlField(content, 'role') || this.summarizeText(content || agent.tags) || '-'
     },
     summarizeText(text) {
       if (!text) return ''
@@ -702,9 +703,13 @@ export default {
     findAgentByName(name) {
       return this.agents.find(item => item.agent_name === name)
     },
+    agentRuntimeContent(agent) {
+      return agent.active_content || agent.content || ''
+    },
     makeGraphNode(name, type) {
       const agent = this.findAgentByName(name)
-      const skills = agent ? this.parseYamlList(agent.content, 'skills') : []
+      const content = agent ? this.agentRuntimeContent(agent) : ''
+      const skills = agent ? this.parseYamlList(content, 'skills') : []
       return {
         id: `${type}:${name}`,
         name,
@@ -914,6 +919,94 @@ export default {
       }
       this.drawerForm.content = out.join('\n')
     },
+    readDrawerYamlField(raw, key) {
+      const lines = String(raw || '').replace(/\r\n/g, '\n').split('\n')
+      const keyRe = new RegExp(`^${key}:[ \\t]*(.*)$`)
+      for (let index = 0; index < lines.length; index += 1) {
+        const match = lines[index].match(keyRe)
+        if (!match) continue
+        const inline = this.cleanDrawerYamlFieldValue(match[1])
+        if (inline) return inline
+        const block = this.readDrawerIndentedYamlBlock(lines, index + 1)
+        return this.cleanDrawerYamlFieldValue(block.lines.join('\n'))
+      }
+      return ''
+    },
+    readDrawerIndentedYamlBlock(lines, startIndex) {
+      const block = []
+      for (let index = startIndex; index < lines.length; index += 1) {
+        const line = lines[index]
+        if (line.match(/^([A-Za-z_][A-Za-z0-9_-]*):/)) break
+        if (!line.trim()) {
+          if (block.length) block.push('')
+          continue
+        }
+        if (!/^[ \t]+/.test(line)) break
+        block.push(line.replace(/^[ \t]{2}/, ''))
+      }
+      while (block.length && !block[block.length - 1].trim()) block.pop()
+      return { lines: block }
+    },
+    cleanDrawerYamlFieldValue(value) {
+      const text = String(value || '').trim()
+      if (['>', '|', '｜', '&gt;', '&vert;'].includes(text)) return ''
+      return text
+    },
+    readDrawerYamlSkills(raw) {
+      const lines = String(raw || '').replace(/\r\n/g, '\n').split('\n')
+      for (let index = 0; index < lines.length; index += 1) {
+        const match = lines[index].match(/^skills:[ \t]*(.*)$/)
+        if (!match) continue
+        const inline = match[1].trim()
+        if (inline === '[]') return []
+        if (inline.startsWith('[') && inline.endsWith(']')) {
+          return inline.slice(1, -1).split(',').map(item => item.trim().replace(/^['"]|['"]$/g, '')).filter(Boolean)
+        }
+        const skills = []
+        for (let skillIndex = index + 1; skillIndex < lines.length; skillIndex += 1) {
+          const line = lines[skillIndex]
+          if (line.match(/^([A-Za-z_][A-Za-z0-9_-]*):/)) break
+          const item = line.match(/^[ \t]*-[ \t]+(.+)$/)
+          if (item) skills.push(item[1].trim())
+          else if (line.trim()) throw new Error('Agent 配置 YAML 中 skills 必须是 YAML 数组')
+        }
+        return skills
+      }
+      return this.drawerForm.skills || []
+    },
+    drawerYamlBlock(key, value) {
+      const text = String(value || '').trimEnd()
+      if (!text) return [`${key}: ""`]
+      return [`${key}: |`, ...text.split('\n').map(line => `  ${line}`)]
+    },
+    drawerSkillsYaml(skills) {
+      if (!skills || !skills.length) return ['skills: []']
+      return ['skills:', ...skills.map(skill => `  - ${skill}`)]
+    },
+    normalizeDrawerAgentYaml(content) {
+      const raw = String(content || '')
+      const yamlName = this.readDrawerYamlField(raw, 'name')
+      if (yamlName && yamlName !== this.drawerForm.agent_name) {
+        throw new Error('Agent 配置 YAML 中 name 必须与 Agent 名称一致')
+      }
+      const role = this.readDrawerYamlField(raw, 'role')
+      const goal = this.readDrawerYamlField(raw, 'goal')
+      const backstory = this.readDrawerYamlField(raw, 'backstory')
+      const skills = this.readDrawerYamlSkills(raw)
+      if (!role) throw new Error('Agent 配置 YAML 中 role 不能为空')
+      if (!goal) throw new Error('Agent 配置 YAML 中 goal 不能为空')
+      this.drawerForm.skills = skills
+      return [
+        `name: ${this.drawerForm.agent_name}`,
+        `role: ${role}`,
+        '',
+        ...this.drawerYamlBlock('goal', goal),
+        '',
+        ...this.drawerYamlBlock('backstory', backstory),
+        '',
+        ...this.drawerSkillsYaml(skills)
+      ].join('\n')
+    },
     async checkDrawerNameLive() {
       if (!this.drawerForm.agent_name) return
       if (!NAME_RE.test(this.drawerForm.agent_name)) {
@@ -948,10 +1041,18 @@ export default {
         this.$message.warning(result.message || 'Agent 名称已存在')
         return
       }
+      let normalizedContent = ''
+      try {
+        normalizedContent = this.normalizeDrawerAgentYaml(this.drawerForm.content)
+      } catch (error) {
+        this.$message.warning(error.message || 'Agent 配置 YAML 格式不正确')
+        return
+      }
+      this.drawerForm.content = normalizedContent
       await createAgent({
         agent_name: this.drawerForm.agent_name,
         type: this.drawerForm.type,
-        content: this.drawerForm.content,
+        content: normalizedContent,
         tags: this.drawerForm.tags
       })
       this.$message.success(`Agent「${this.drawerForm.agent_name}」已创建`)
