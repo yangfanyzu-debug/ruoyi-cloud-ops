@@ -32,6 +32,11 @@ module.exports = {
     port: port,
     open: true,
     proxy: {
+      '/alert-aisre-config-api': {
+        target: 'http://127.0.0.1:8405',
+        changeOrigin: true,
+        pathRewrite: { '^/alert-aisre-config-api': '' }
+      },
       // detail: https://cli.vuejs.org/config/#devserver-proxy
       [process.env.VUE_APP_BASE_API]: {
         target: `http://localhost:8080`,
