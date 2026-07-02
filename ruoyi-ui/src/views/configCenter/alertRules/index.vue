@@ -164,11 +164,24 @@ export default {
     validation() { return validateRules(this.rules) },
     matchedIndex() { return this.testResult.matchedRuleIndex || this.testResult.matchedIndex || '-' }
   },
+  watch: {
+    'testForm.system'() { this.clearTestResult() },
+    'testForm.source'() { this.clearTestResult() }
+  },
   created() { this.loadAll() },
   methods: {
     buildRuleText,
     statusMeta(status) { return STATUS_META[status] || { label: status || '-', type: 'info' } },
-    displayTime(value) { return value ? String(value).replace('T', ' ').replace(/\.\d+/, '') : '-' },
+    displayTime(value) {
+      if (!value) return '-'
+      const source = String(value).trim().replace(' ', 'T')
+      const timestamp = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(source) ? source : `${source}Z`
+      const date = new Date(timestamp)
+      if (Number.isNaN(date.getTime())) return '-'
+      const pad = part => String(part).padStart(2, '0')
+      return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
+    },
+    clearTestResult() { this.testResult = null },
     async loadAll() {
       this.loading = true
       try {
