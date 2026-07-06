@@ -9,7 +9,8 @@ Agent 管理表不使用外键，兼容 MySQL 5.7。资源名称继续全局唯�
 
 ## Gateway
 
-在 Nacos 的 `ruoyi-gateway-dev.yml` 增加路由：
+在 Nacos 的 `ruoyi-gateway-dev.yml` 配置统一 AISRE 后端路由。Agent 管理和 Skill IDE
+都由端口 `5000` 上的同一个 FastAPI 进程提供：
 
 ```yaml
 spring:
@@ -17,34 +18,27 @@ spring:
     gateway:
       routes:
         - id: agent-mgmt-api
-          uri: http://127.0.0.1:8300
+          uri: http://127.0.0.1:5000
           predicates:
             - Path=/agent-mgmt-api/**
           filters:
             - StripPrefix=1
 ```
 
-前端生产环境仍通过 `/prod-api/agent-mgmt-api/**` 访问，Nginx 先转发到 RuoYi Gateway，Gateway 再转发到 FastAPI 服务。
+前端生产环境仍通过 `/prod-api/agent-mgmt-api/**` 访问，Nginx 先转发到 RuoYi Gateway，Gateway 再转发到统一 AISRE FastAPI 服务。
 
 ## 后端服务
 
-后端部署到 `192.168.0.142`：
+后端随 AISRE 部署并由 `skill-ide.service` 管理：
 
 ```bash
-cd /opt/agent-mgmt-service
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-export AGENT_MGMT_DB_HOST=192.168.0.140
-export AGENT_MGMT_DB_NAME=ry-cloud
-export AGENT_MGMT_DB_USER=root
-export AGENT_MGMT_DB_PASSWORD='******'
-nohup .venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8300 > agent-mgmt.log 2>&1 &
+systemctl status skill-ide.service
+curl http://127.0.0.1:5000/health
+curl http://127.0.0.1:5000/ready
 ```
 
 健康检查：
 
 ```bash
-curl http://127.0.0.1:8300/health
 curl http://127.0.0.1:8080/agent-mgmt-api/health
 ```

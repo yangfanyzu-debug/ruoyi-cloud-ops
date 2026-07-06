@@ -89,9 +89,12 @@ public class AuthFilter implements GlobalFilter, Ordered
         {
             return;
         }
-        String valueStr = value.toString();
-        String valueEncode = ServletUtils.urlEncode(valueStr);
-        mutate.header(name, valueEncode);
+        String valueEncode = ServletUtils.urlEncode(value.toString());
+        mutate.headers(headers ->
+        {
+            headers.remove(name);
+            headers.add(name, valueEncode);
+        });
     }
 
     private void removeHeader(ServerHttpRequest.Builder mutate, String name)
