@@ -1,19 +1,5 @@
 <template>
   <div class="ai-overview" v-loading="loading">
-    <section class="hero">
-      <div class="hero__copy">
-        <span class="eyebrow">ALERT INTELLIGENCE / AI OPERATIONS</span>
-        <h1>AI 告警处理概览</h1>
-        <p>看清每一条告警由谁处理、AI 覆盖到哪里，以及仍需人工介入的压力分布。</p>
-      </div>
-      <div class="hero__criteria">
-        <span class="criteria__label">AI 判定口径</span>
-        <code>create_by = AIAGENT_MATCH</code>
-        <i>AND</i>
-        <code>deal_desc 包含 AI Agent</code>
-      </div>
-    </section>
-
     <section class="filter-bar">
       <div class="quick-ranges">
         <button
@@ -38,6 +24,12 @@
         @change="handleCustomRange"
       />
       <el-button class="query-button" icon="el-icon-search" @click="loadData">查询</el-button>
+      <div class="criteria-inline">
+        <span class="criteria__label">AI 判定口径</span>
+        <code>create_by = AIAGENT_MATCH</code>
+        <i>AND</i>
+        <code>deal_desc 包含 AI Agent</code>
+      </div>
       <span class="updated-at">
         <i class="status-dot" />
         {{ updatedAt ? `更新于 ${updatedAt}` : '等待查询' }}
@@ -137,12 +129,6 @@
           </header>
           <dimension-table :rows="dimensions.eventTypes" />
         </article>
-        <article class="panel table-panel">
-          <header class="panel__header">
-            <div><span>DATA CENTER</span><h2>按数据中心</h2></div>
-          </header>
-          <dimension-table :rows="dimensions.dataCenters" />
-        </article>
       </section>
     </template>
   </div>
@@ -188,8 +174,7 @@ const emptySummary = () => ({
 const emptyDimensions = () => ({
   systems: [],
   sources: [],
-  eventTypes: [],
-  dataCenters: []
+  eventTypes: []
 })
 
 export default {
@@ -389,50 +374,17 @@ $paper: #f4f1eb;
   font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
 }
 
-.hero {
-  position: relative;
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  min-height: 176px;
-  padding: 32px 36px;
-  overflow: hidden;
-  color: #fff;
-  background: $ink;
-  border-radius: 4px 4px 18px 4px;
-  box-shadow: 0 18px 40px rgba(23, 63, 95, 0.18);
-}
-
-.hero::after {
-  position: absolute;
-  top: -68px;
-  right: 18%;
-  width: 210px;
-  height: 260px;
-  content: "";
-  border: 1px solid rgba(255, 255, 255, 0.13);
-  transform: rotate(26deg);
-}
-
-.hero__copy, .hero__criteria { position: relative; z-index: 1; }
-.eyebrow, .panel__header span, .metric-card__index {
+.panel__header span, .metric-card__index {
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.16em;
 }
-.eyebrow { color: #ffb49f; }
-.hero h1 { margin: 10px 0 7px; font-family: "STSong", "SimSun", serif; font-size: 36px; font-weight: 600; letter-spacing: 0.02em; }
-.hero p { margin: 0; color: #b9c9d5; font-size: 14px; }
-.hero__criteria { display: flex; align-items: center; gap: 9px; padding: 13px 16px; background: rgba(8, 27, 41, 0.5); border: 1px solid rgba(255,255,255,.13); }
-.hero__criteria code { color: #fff; font-family: "SFMono-Regular", Consolas, monospace; font-size: 11px; }
-.hero__criteria i { color: #ff8b6d; font-size: 10px; font-style: normal; font-weight: 800; }
-.criteria__label { margin-right: 3px; color: #8fa8b9; font-size: 11px; }
 
 .filter-bar {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin: 18px 0;
+  margin: 0 0 16px;
   padding: 13px 16px;
   background: #fff;
   border-left: 3px solid $orange;
@@ -443,6 +395,10 @@ $paper: #f4f1eb;
 .quick-ranges button.active { color: #fff; background: $ink; box-shadow: 0 4px 10px rgba(23, 63, 95, .2); }
 .date-range { width: 370px; }
 .query-button { color: #fff; background: $orange; border-color: $orange; }
+.criteria-inline { display: flex; align-items: center; gap: 7px; margin-left: 8px; padding: 9px 12px; color: #536675; background: #f3f6f7; border-left: 2px solid #cbd5db; white-space: nowrap; }
+.criteria-inline code { color: $ink; font-family: "SFMono-Regular", Consolas, monospace; font-size: 10px; }
+.criteria-inline i { color: $orange; font-size: 9px; font-style: normal; font-weight: 800; }
+.criteria__label { margin-right: 2px; color: #83919b; font-size: 10px; }
 .updated-at { margin-left: auto; color: #8a959e; font-size: 12px; white-space: nowrap; }
 .status-dot { display: inline-block; width: 7px; height: 7px; margin-right: 5px; background: #35a36f; border-radius: 50%; box-shadow: 0 0 0 4px rgba(53,163,111,.12); }
 
@@ -470,7 +426,8 @@ $paper: #f4f1eb;
 .quality-strip p { margin: 0; text-align: right; }
 
 .chart-layout { display: grid; grid-template-columns: minmax(0, 2fr) minmax(290px, .8fr); gap: 14px; }
-.dimension-grid, .table-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 14px; }
+.dimension-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 14px; }
+.table-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; margin-top: 14px; }
 .panel { min-width: 0; padding: 20px 22px 16px; background: #fff; border: 1px solid #e2e6e8; box-shadow: 0 8px 22px rgba(23,63,95,.055); }
 .panel--trend, .panel--composition { min-height: 372px; }
 .dimension-grid .panel { min-height: 390px; }
@@ -488,8 +445,8 @@ $paper: #f4f1eb;
 ::v-deep .rate-cell { color: $orange; font-weight: 600; }
 
 @media (max-width: 1180px) {
-  .hero { align-items: flex-start; flex-direction: column; gap: 24px; }
   .filter-bar { align-items: flex-start; flex-wrap: wrap; }
+  .criteria-inline { margin-left: 0; }
   .updated-at { margin: 8px 0 0 auto; }
   .metric-grid { grid-template-columns: repeat(2, 1fr); }
   .quality-strip { grid-template-columns: repeat(3, 1fr); }
@@ -498,12 +455,10 @@ $paper: #f4f1eb;
 
 @media (max-width: 768px) {
   .ai-overview { padding: 12px; }
-  .hero { padding: 25px 22px; }
-  .hero h1 { font-size: 29px; }
-  .hero__criteria { align-items: flex-start; flex-direction: column; }
   .filter-bar { display: block; }
   .date-range { width: 100%; margin: 10px 0; }
   .query-button { width: 100%; }
+  .criteria-inline { align-items: flex-start; flex-direction: column; margin: 10px 0 0; white-space: normal; }
   .updated-at { display: block; margin-top: 12px; }
   .metric-grid, .chart-layout, .dimension-grid, .table-grid { grid-template-columns: 1fr; }
   .quality-strip { grid-template-columns: 1fr; }
