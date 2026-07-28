@@ -8,7 +8,7 @@ const page = read('src/views/alertAnalysis/aiOverview/index.vue')
 const chart = read('src/views/alertAnalysis/aiOverview/StatsChart.vue')
 const menu = read('../sql/ai_alert_overview_menu.sql')
 
-assert.match(api, /alert-overview-api\/api\/stats\/overview/)
+assert.match(api, /alert_statistics-api\/api\/stats\/overview/)
 assert.match(page, /最近 7 天/)
 assert.match(page, /最近 30 天/)
 assert.match(page, /最近 90 天/)

@@ -8,7 +8,7 @@ const direct = config => request({
 
 export function getAlertOverview(params) {
   return direct({
-    url: 'alert-overview-api/api/stats/overview',
+    url: 'alert_statistics-api/api/stats/overview',
     method: 'get',
     params
   }).then(response => response.data)

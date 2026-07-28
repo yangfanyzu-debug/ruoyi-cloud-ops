@@ -32,10 +32,10 @@ module.exports = {
     port: port,
     open: true,
     proxy: {
-      '/alert-overview-api': {
+      '/alert_statistics-api': {
         target: 'http://127.0.0.1:8410',
         changeOrigin: true,
-        pathRewrite: { '^/alert-overview-api': '' }
+        pathRewrite: { '^/alert_statistics-api': '' }
       },
       '/alert-aisre-config-api': {
         target: 'http://127.0.0.1:8405',
