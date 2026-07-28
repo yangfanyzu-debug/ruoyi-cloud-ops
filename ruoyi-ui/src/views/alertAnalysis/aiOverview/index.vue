@@ -122,14 +122,6 @@
         </article>
       </section>
 
-      <section class="table-grid">
-        <article class="panel table-panel">
-          <header class="panel__header">
-            <div><span>EVENT TYPE</span><h2>按告警类型</h2></div>
-          </header>
-          <dimension-table :rows="dimensions.eventTypes" />
-        </article>
-      </section>
     </template>
   </div>
 </template>
@@ -137,29 +129,6 @@
 <script>
 import { getAlertOverview } from '@/api/alertOverview'
 import StatsChart from './StatsChart'
-
-const DimensionTable = {
-  functional: true,
-  props: {
-    rows: { type: Array, default: () => [] }
-  },
-  render(h, context) {
-    return h('el-table', {
-      props: { data: context.props.rows.slice(0, 10), stripe: true, size: 'small' }
-    }, [
-      h('el-table-column', { props: { prop: 'dimensionName', label: '维度', minWidth: 130, showOverflowTooltip: true } }),
-      h('el-table-column', { props: { prop: 'totalCount', label: '总量', width: 82, align: 'right' } }),
-      h('el-table-column', { props: { prop: 'aiCount', label: 'AI', width: 82, align: 'right' } }),
-      h('el-table-column', { props: { prop: 'nonAiCount', label: '非 AI', width: 82, align: 'right' } }),
-      h('el-table-column', {
-        props: { label: 'AI 占比', width: 96, align: 'right' },
-        scopedSlots: {
-          default: scope => h('span', { class: 'rate-cell' }, `${Number(scope.row.aiRate || 0).toFixed(1)}%`)
-        }
-      })
-    ])
-  }
-}
 
 const emptySummary = () => ({
   totalCount: 0,
@@ -173,13 +142,12 @@ const emptySummary = () => ({
 
 const emptyDimensions = () => ({
   systems: [],
-  sources: [],
-  eventTypes: []
+  sources: []
 })
 
 export default {
   name: 'AiAlertOverview',
-  components: { StatsChart, DimensionTable },
+  components: { StatsChart },
   data() {
     return {
       loading: false,
@@ -427,7 +395,6 @@ $paper: #f4f1eb;
 
 .chart-layout { display: grid; grid-template-columns: minmax(0, 2fr) minmax(290px, .8fr); gap: 14px; }
 .dimension-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 14px; }
-.table-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; margin-top: 14px; }
 .panel { min-width: 0; padding: 20px 22px 16px; background: #fff; border: 1px solid #e2e6e8; box-shadow: 0 8px 22px rgba(23,63,95,.055); }
 .panel--trend, .panel--composition { min-height: 372px; }
 .dimension-grid .panel { min-height: 390px; }
@@ -435,14 +402,9 @@ $paper: #f4f1eb;
 .panel__header span { color: $orange; }
 .panel__header h2 { margin: 5px 0 0; color: $ink; font-family: "STSong", "SimSun", serif; font-size: 21px; }
 .panel__header em { padding-top: 4px; color: #95a0a8; font-size: 10px; font-style: normal; }
-.table-panel { min-height: 340px; }
 .empty-state { margin-top: 14px; background: #fff; border: 1px solid #e2e6e8; }
 
 ::v-deep .el-range-editor.el-input__inner { border-radius: 0; }
-::v-deep .el-table::before { display: none; }
-::v-deep .el-table th.el-table__cell { color: #6f7b85; font-size: 11px; font-weight: 600; background: #f4f6f7; }
-::v-deep .el-table td.el-table__cell { color: #354b5d; }
-::v-deep .rate-cell { color: $orange; font-weight: 600; }
 
 @media (max-width: 1180px) {
   .filter-bar { align-items: flex-start; flex-wrap: wrap; }
@@ -460,7 +422,7 @@ $paper: #f4f1eb;
   .query-button { width: 100%; }
   .criteria-inline { align-items: flex-start; flex-direction: column; margin: 10px 0 0; white-space: normal; }
   .updated-at { display: block; margin-top: 12px; }
-  .metric-grid, .chart-layout, .dimension-grid, .table-grid { grid-template-columns: 1fr; }
+  .metric-grid, .chart-layout, .dimension-grid { grid-template-columns: 1fr; }
   .quality-strip { grid-template-columns: 1fr; }
   .quality-strip > div { margin: 0; padding: 10px 0; border-right: 0; border-bottom: 1px solid #dde2e5; }
 }
