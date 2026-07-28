@@ -28,17 +28,22 @@ export default {
   },
   mounted() {
     this.chart = echarts.init(this.$refs.chart)
+    this.chart.on('click', this.handleChartClick)
     this.renderChart()
     window.addEventListener('resize', this.resize)
   },
   beforeDestroy() {
     window.removeEventListener('resize', this.resize)
     if (this.chart) {
+      this.chart.off('click', this.handleChartClick)
       this.chart.dispose()
       this.chart = null
     }
   },
   methods: {
+    handleChartClick(params) {
+      this.$emit('select', params)
+    },
     renderChart() {
       if (this.chart) {
         this.chart.setOption(this.option, true)

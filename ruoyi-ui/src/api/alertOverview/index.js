@@ -13,3 +13,11 @@ export function getAlertOverview(params) {
     params
   }).then(response => response.data)
 }
+
+export function getAlertDetails(params) {
+  return direct({
+    url: 'alert_statistics-api/api/stats/details',
+    method: 'get',
+    params
+  }).then(response => response.data)
+}
