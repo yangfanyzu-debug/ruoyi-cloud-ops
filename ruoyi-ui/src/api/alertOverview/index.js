@@ -24,7 +24,7 @@ export function getAlertDetails(params) {
 
 export function getMonthlyReportStats(params) {
   return direct({
-    url: 'alert_statistics-api/api/stats/monthly-report',
+    url: 'monthly-report-api/osenv/node/resource/cap/stat',
     method: 'get',
     params
   }).then(response => response.data)

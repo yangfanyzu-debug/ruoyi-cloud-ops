@@ -141,7 +141,8 @@ export default {
     async loadData() {
       this.loading = true
       try {
-        const data = await getMonthlyReportStats({ month: this.month })
+        const [year, monthNo] = this.month.split('-')
+        const data = await getMonthlyReportStats({ year: Number(year), month_no: Number(monthNo) })
         this.levelData = this.normalize(data)
         this.isMockData = false
         this.updatedAt = new Date().toLocaleTimeString('zh-CN', { hour12: false })

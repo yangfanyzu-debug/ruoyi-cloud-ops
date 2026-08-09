@@ -37,6 +37,13 @@ module.exports = {
         changeOrigin: true,
         pathRewrite: { '^/alert_statistics-api': '' }
       },
+      '/monthly-report-api': {
+        target: 'http://10.2.64.36:9212',
+        changeOrigin: true,
+        pathRewrite: { '^/monthly-report-api': '' },
+        proxyTimeout: 30000,
+        timeout: 30000
+      },
       '/alert-aisre-config-api': {
         target: 'http://127.0.0.1:8405',
         changeOrigin: true,
