@@ -21,3 +21,11 @@ export function getAlertDetails(params) {
     params
   }).then(response => response.data)
 }
+
+export function getMonthlyReportStats(params) {
+  return direct({
+    url: 'alert_statistics-api/api/stats/monthly-report',
+    method: 'get',
+    params
+  }).then(response => response.data)
+}
