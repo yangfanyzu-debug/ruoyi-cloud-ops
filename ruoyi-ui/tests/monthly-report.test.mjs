@@ -14,6 +14,8 @@ assert.match(page, /unexists/)
 assert.match(page, /A\+/)
 assert.match(page, /缺失报告系统明细/)
 assert.match(page, /getMonthlyReportStats/)
+assert.match(page, /演示数据/)
+assert.match(page, /mockPayload/)
 assert.match(menu, /alertAnalysis\/monthlyReport\/index/)
 assert.match(menu, /alert:monthly-report:list/)
 

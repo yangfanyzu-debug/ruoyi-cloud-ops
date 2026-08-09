@@ -4,7 +4,7 @@
       <div>
         <span class="eyebrow">REPORT INTELLIGENCE / MONTHLY COVERAGE</span>
         <h1>月度报告统计</h1>
-        <p>按系统级别追踪报告覆盖情况，快速定位仍缺少月度报告的系统。</p>
+        <p>按系统级别追踪报告覆盖情况，快速定位仍缺少月度报告的系统。<el-tag v-if="isMockData" size="mini" type="warning" effect="dark">演示数据</el-tag></p>
       </div>
       <div class="header-stamp">
         <span>REPORTING PERIOD</span>
@@ -100,6 +100,7 @@ export default {
   data() {
     return {
       loading: false,
+      isMockData: false,
       month: this.formatMonth(new Date()),
       updatedAt: '',
       levels: LEVELS,
@@ -142,10 +143,22 @@ export default {
       try {
         const data = await getMonthlyReportStats({ month: this.month })
         this.levelData = this.normalize(data)
+        this.isMockData = false
         this.updatedAt = new Date().toLocaleTimeString('zh-CN', { hour12: false })
       } catch (error) {
-        this.levelData = LEVELS.reduce((result, level) => ({ ...result, [level]: emptyLevel() }), {})
+        this.levelData = this.normalize(this.mockPayload())
+        this.isMockData = true
+        this.updatedAt = new Date().toLocaleTimeString('zh-CN', { hour12: false })
+        this.$message.info('月度报告接口暂不可用，当前展示演示数据')
       } finally { this.loading = false }
+    },
+    mockPayload() {
+      return {
+        A: { exist: 70, total: 70, unexists: [] },
+        'A+': { exist: 21, total: 22, unexists: [{ systemId: 'DCOS', systemName: '云计算运维平台' }] },
+        B: { exist: 36, total: 40, unexists: [{ systemId: 'MGS', systemName: '营销管理系统' }, { systemId: 'CRM', systemName: '客户关系管理系统' }, { systemId: 'OMS', systemName: '订单管理系统' }, { systemId: 'BOSS', systemName: '业务运营支撑系统' }] },
+        C: { exist: 18, total: 24, unexists: [{ systemId: 'PORTAL', systemName: '统一门户' }, { systemId: 'OA', systemName: '办公自动化系统' }, { systemId: 'HELP', systemName: '服务台系统' }, { systemId: 'ASSET', systemName: '资产管理系统' }, { systemId: 'LOG', systemName: '日志分析平台' }, { systemId: 'CMDB', systemName: '配置管理平台' }] }
+      }
     }
   }
 }
@@ -155,7 +168,7 @@ export default {
 $ink: #173f5f; $orange: #ff5c35; $paper: #f4f1eb;
 .monthly-report { min-height: 100%; padding: 22px; color: #183044; background: linear-gradient(rgba(23,63,95,.025) 1px,transparent 1px), linear-gradient(90deg,rgba(23,63,95,.025) 1px,transparent 1px),$paper; background-size: 24px 24px; font-family: "PingFang SC", "Microsoft YaHei", sans-serif; }
 .report-header { display:flex; justify-content:space-between; gap:20px; padding:30px 34px; color:#fff; background:linear-gradient(120deg,#173f5f,#20577c); box-shadow:0 12px 25px rgba(23,63,95,.16); }
-.eyebrow,.card-index { font-size:10px; font-weight:700; letter-spacing:.16em; } .report-header .eyebrow { color:#ff9b81; } h1 { margin:8px 0 6px; font-family:"STSong","SimSun",serif; font-size:32px; font-weight:600; } .report-header p { margin:0; color:#bed0dc; font-size:13px; }
+.eyebrow,.card-index { font-size:10px; font-weight:700; letter-spacing:.16em; } .report-header .eyebrow { color:#ff9b81; } h1 { margin:8px 0 6px; font-family:"STSong","SimSun",serif; font-size:32px; font-weight:600; } .report-header p { margin:0; color:#bed0dc; font-size:13px; } .report-header p ::v-deep .el-tag { margin-left:10px; vertical-align:1px; }
 .header-stamp { min-width:150px; align-self:center; padding-left:24px; border-left:1px solid rgba(255,255,255,.25); } .header-stamp span { display:block; color:#9db7c8; font-size:10px; letter-spacing:.12em; } .header-stamp strong { display:block; margin-top:7px; color:#fff; font-size:24px; }
 .toolbar { display:flex; align-items:center; gap:12px; margin:16px 0; padding:13px 16px; background:#fff; border-left:3px solid $orange; box-shadow:0 7px 20px rgba(23,63,95,.07); } .toolbar .updated { margin-left:auto; color:#87939c; font-size:12px; } .updated i { display:inline-block; width:7px; height:7px; margin-right:6px; background:#35a36f; border-radius:50%; }
 .summary-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:14px; } .summary-card { min-height:132px; padding:21px 24px; background:#fff; border-top:2px solid #cbd5db; box-shadow:0 8px 20px rgba(23,63,95,.06); } .summary-card--exist { border-color:#35a36f; } .summary-card--missing { border-color:$orange; } .summary-card--rate { color:#fff; background:$ink; border-color:$orange; } .card-index { display:block; margin-bottom:16px; color:#8a98a2; } .summary-card--missing .card-index { color:$orange; } .summary-card--rate .card-index { color:#ff9b81; } .summary-card strong { display:block; font-size:36px; line-height:1; } .summary-card p { margin:10px 0 0; color:#8a969e; font-size:12px; } .summary-card--rate p { color:#b8c9d4; } .progress,.level-bar { height:4px; margin-top:15px; overflow:hidden; background:rgba(255,255,255,.15); } .progress span { display:block; height:100%; background:$orange; }
