@@ -1,46 +1,66 @@
 <template>
   <div class="app-container report-detail-page">
-    <el-page-header content="报告详情" @back="goBack" />
+    <div class="detail-header">
+      <el-button icon="el-icon-arrow-left" size="mini" @click="goBack">返回</el-button>
+      <div class="detail-title-wrap">
+        <div class="detail-title">{{ report.title || '报告详情' }}</div>
+        <div class="detail-meta">
+          <span>{{ report.systemId || '-' }}</span>
+          <span>{{ report.reportMonth || '-' }}</span>
+          <span>{{ report.createTime || '-' }}</span>
+        </div>
+      </div>
+    </div>
 
-    <el-descriptions class="detail-block" :column="2" border>
-      <el-descriptions-item label="系统编码">{{ report.systemId }}</el-descriptions-item>
-      <el-descriptions-item label="报表月份">{{ report.reportMonth }}</el-descriptions-item>
-      <el-descriptions-item label="报告标题" :span="2">{{ report.title }}</el-descriptions-item>
-      <el-descriptions-item label="创建时间">{{ report.createTime }}</el-descriptions-item>
-    </el-descriptions>
+    <div class="version-summary">
+      <div class="summary-item">
+        <span class="summary-label">版本数</span>
+        <strong>{{ versions.length }}</strong>
+      </div>
+      <div class="summary-item">
+        <span class="summary-label">最新版本</span>
+        <strong>{{ latestVersion ? `v${latestVersion.versionNo}` : '-' }}</strong>
+      </div>
+      <div class="summary-item">
+        <span class="summary-label">最新状态</span>
+        <el-tag v-if="latestVersion" :type="statusType(latestVersion.auditStatus)" size="small">
+          {{ statusLabel(latestVersion.auditStatus) }}
+        </el-tag>
+        <strong v-else>-</strong>
+      </div>
+    </div>
 
-    <el-table v-loading="loading" :data="report.versions || []" border>
-      <el-table-column label="版本" prop="versionNo" width="90">
+    <el-table v-loading="loading" :data="versions" class="version-table" border>
+      <el-table-column label="版本" width="110">
         <template slot-scope="scope">
-          <el-tag size="mini">v{{ scope.row.versionNo }}</el-tag>
+          <el-tag size="small" effect="plain">v{{ scope.row.versionNo }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="类型" prop="versionType" width="110">
+      <el-table-column label="文件" min-width="300">
         <template slot-scope="scope">
-          {{ scope.row.versionType === 'initial' ? '初始版本' : '上传版本' }}
+          <div class="file-name">{{ scope.row.fileName }}</div>
+          <div class="file-meta">
+            <span>{{ scope.row.versionType === 'initial' ? '初始版本' : '上传版本' }}</span>
+            <span>{{ formatSize(scope.row.fileSize) }}</span>
+            <span>{{ scope.row.uploader || '-' }}</span>
+          </div>
         </template>
       </el-table-column>
-      <el-table-column label="文件名" prop="fileName" min-width="260" show-overflow-tooltip />
-      <el-table-column label="文件大小" prop="fileSize" width="110">
-        <template slot-scope="scope">{{ formatSize(scope.row.fileSize) }}</template>
-      </el-table-column>
-      <el-table-column label="审核状态" prop="auditStatus" width="120">
+      <el-table-column label="审核" width="150">
         <template slot-scope="scope">
-          <el-tag :type="statusType(scope.row.auditStatus)" size="mini">
+          <el-tag :type="statusType(scope.row.auditStatus)" size="small">
             {{ statusLabel(scope.row.auditStatus) }}
           </el-tag>
+          <div class="audit-conclusion">{{ scope.row.latestAuditConclusion || '-' }}</div>
         </template>
       </el-table-column>
-      <el-table-column label="审核结论" prop="latestAuditConclusion" width="120" show-overflow-tooltip />
-      <el-table-column label="上传人" prop="uploader" width="120" show-overflow-tooltip />
       <el-table-column label="创建时间" prop="createTime" width="170" />
-      <el-table-column label="操作" width="260" fixed="right">
+      <el-table-column label="操作" width="280" fixed="right">
         <template slot-scope="scope">
-          <el-button size="mini" type="text" icon="el-icon-document" @click="openPreview(scope.row.id)">预览</el-button>
-          <el-button size="mini" type="text" icon="el-icon-download" @click="downloadVersion(scope.row.id)">下载</el-button>
+          <el-button size="mini" type="primary" plain icon="el-icon-document" @click="openPreview(scope.row.id)">预览</el-button>
+          <el-button size="mini" icon="el-icon-download" @click="downloadVersion(scope.row.id)">下载</el-button>
           <el-button
             size="mini"
-            type="text"
             icon="el-icon-reading"
             :disabled="!scope.row.latestAuditId"
             @click="openAudit(scope.row.latestAuditId)"
@@ -49,21 +69,34 @@
       </el-table-column>
     </el-table>
 
-    <el-dialog title="审核详情" :visible.sync="auditDialogVisible" width="760px" append-to-body>
-      <el-descriptions v-if="audit.id" :column="2" border>
-        <el-descriptions-item label="审核状态">{{ statusLabel(audit.status) }}</el-descriptions-item>
-        <el-descriptions-item label="模型">{{ audit.modelName || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="提示词版本">v{{ audit.promptVersion || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="完成时间">{{ audit.finishedAt || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="结论">{{ audit.summary && audit.summary['结论'] }}</el-descriptions-item>
-        <el-descriptions-item label="问题数量">{{ audit.summary && audit.summary['问题数量'] }}</el-descriptions-item>
-        <el-descriptions-item label="建议" :span="2">{{ audit.summary && audit.summary['建议'] }}</el-descriptions-item>
-        <el-descriptions-item v-if="audit.errorMessage" label="错误" :span="2">{{ audit.errorMessage }}</el-descriptions-item>
-      </el-descriptions>
+    <el-dialog title="审核详情" :visible.sync="auditDialogVisible" width="820px" append-to-body>
+      <div v-if="audit.id" class="audit-summary">
+        <div>
+          <span class="summary-label">状态</span>
+          <el-tag :type="statusType(audit.status)" size="small">{{ statusLabel(audit.status) }}</el-tag>
+        </div>
+        <div>
+          <span class="summary-label">结论</span>
+          <strong>{{ audit.summary && audit.summary['结论'] || '-' }}</strong>
+        </div>
+        <div>
+          <span class="summary-label">问题数</span>
+          <strong>{{ audit.summary && audit.summary['问题数量'] }}</strong>
+        </div>
+        <div>
+          <span class="summary-label">模型</span>
+          <strong>{{ audit.modelName || '-' }}</strong>
+        </div>
+      </div>
+
+      <div v-if="audit.summary" class="audit-suggestion">
+        {{ audit.summary['建议'] || '无明显问题' }}
+      </div>
+      <el-alert v-if="audit.errorMessage" :title="audit.errorMessage" type="error" show-icon :closable="false" />
 
       <el-table class="audit-table" :data="auditRows" border>
         <el-table-column label="检查点" prop="检查点" min-width="260" show-overflow-tooltip />
-        <el-table-column label="分析结果" prop="分析结果" min-width="360" show-overflow-tooltip />
+        <el-table-column label="分析结果" prop="分析结果" min-width="400" show-overflow-tooltip />
       </el-table>
     </el-dialog>
   </div>
@@ -83,6 +116,12 @@ export default {
     }
   },
   computed: {
+    versions() {
+      return this.report.versions || []
+    },
+    latestVersion() {
+      return this.versions.length ? this.versions[this.versions.length - 1] : null
+    },
     auditRows() {
       return (this.audit.resultData && this.audit.resultData.data) || []
     }
@@ -144,11 +183,103 @@ export default {
 </script>
 
 <style scoped>
-.detail-block {
-  margin: 18px 0;
+.report-detail-page {
+  background: #f6f8fb;
+  min-height: calc(100vh - 84px);
+}
+
+.detail-header,
+.version-summary,
+.version-table {
+  background: #fff;
+  border: 1px solid #e6ebf2;
+  border-radius: 6px;
+}
+
+.detail-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 18px 20px;
+}
+
+.detail-title {
+  color: #1f2d3d;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.detail-meta,
+.file-meta {
+  display: flex;
+  gap: 12px;
+  margin-top: 7px;
+  color: #8492a6;
+  font-size: 12px;
+}
+
+.version-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(140px, 1fr));
+  gap: 12px;
+  margin: 14px 0;
+  padding: 16px 20px;
+}
+
+.summary-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.summary-label {
+  color: #8492a6;
+  font-size: 12px;
+}
+
+.summary-item strong {
+  color: #1f2d3d;
+  font-size: 18px;
+}
+
+.file-name {
+  color: #1f2d3d;
+  font-weight: 600;
+}
+
+.audit-conclusion {
+  margin-top: 8px;
+  color: #606266;
+  font-size: 12px;
+}
+
+.audit-summary {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.audit-summary > div,
+.audit-suggestion {
+  background: #f6f8fb;
+  border-radius: 6px;
+  padding: 12px;
+}
+
+.audit-summary strong {
+  display: block;
+  margin-top: 8px;
+  color: #1f2d3d;
+}
+
+.audit-suggestion {
+  margin-bottom: 14px;
+  color: #606266;
+  line-height: 22px;
 }
 
 .audit-table {
-  margin-top: 16px;
+  margin-top: 14px;
 }
 </style>

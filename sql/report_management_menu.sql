@@ -11,7 +11,7 @@ INSERT INTO sys_menu (
   create_by, create_time, update_by, update_time, remark
 )
 SELECT
-  '报告中心', 0, 75, @report_parent_path, 'ParentView', '', 'ReportManagement',
+  '报告中心', 0, 75, @report_parent_path, 'Layout', '', 'ReportManagement',
   1, 0, 'M', '0', '0', '', 'documentation',
   'admin', SYSDATE(), '', NULL, '报告中心目录'
 WHERE NOT EXISTS (
