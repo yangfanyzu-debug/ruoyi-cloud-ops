@@ -93,6 +93,25 @@ export const constantRoutes = [
         meta: { title: '个人中心', icon: 'user' }
       }
     ]
+  },
+  {
+    path: '/report-management/reports/:id',
+    component: Layout,
+    hidden: true,
+    children: [
+      {
+        path: '',
+        component: () => import('@/views/report-management/report/detail'),
+        name: 'ReportManagementDetail',
+        meta: { title: '报告详情', activeMenu: '/report-management/reports' }
+      }
+    ]
+  },
+  {
+    path: '/report-management/preview/:versionId',
+    component: () => import('@/views/report-management/preview/index'),
+    hidden: true,
+    meta: { title: 'DOCX预览' }
   }
 ]
 
