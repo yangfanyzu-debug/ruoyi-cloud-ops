@@ -1,18 +1,5 @@
 <template>
   <div class="app-container report-page">
-    <div class="status-strip">
-      <div
-        v-for="item in statusCards"
-        :key="item.value"
-        class="status-card"
-        :class="{ active: queryParams.auditStatus === item.value }"
-        @click="setAuditStatus(item.value)"
-      >
-        <div class="status-card-label">{{ item.label }}</div>
-        <div class="status-card-value">{{ item.count }}</div>
-      </div>
-    </div>
-
     <div class="filter-panel">
       <div class="filter-main">
         <el-form ref="queryForm" :model="queryParams" size="small" :inline="true" label-width="68px">
@@ -57,7 +44,7 @@
     </div>
 
     <el-table v-loading="loading" :data="reportList" class="report-table" border>
-      <el-table-column label="报告" min-width="330">
+      <el-table-column label="报告" min-width="300">
         <template slot-scope="scope">
           <div class="report-name" @click="openDetail(scope.row)">{{ scope.row.title }}</div>
           <div class="report-meta">
@@ -65,6 +52,12 @@
             <span>{{ scope.row.reportMonth }}</span>
             <span v-if="scope.row.latestVersionNo">v{{ scope.row.latestVersionNo }}</span>
           </div>
+        </template>
+      </el-table-column>
+      <el-table-column label="JIRA单号" width="170">
+        <template slot-scope="scope">
+          <el-tag v-if="scope.row.jiraId" size="small" effect="plain">{{ scope.row.jiraId }}</el-tag>
+          <span v-else class="empty-text">-</span>
         </template>
       </el-table-column>
       <el-table-column label="最新审核" width="140">
@@ -179,22 +172,6 @@ export default {
       }
     }
   },
-  computed: {
-    statusCards() {
-      const counts = this.reportList.reduce((acc, item) => {
-        const key = item.latestAuditStatus || 'pending'
-        acc[key] = (acc[key] || 0) + 1
-        return acc
-      }, {})
-      return [
-        { label: '全部', value: '', count: this.total },
-        { label: '审核中', value: 'running', count: counts.running || 0 },
-        { label: '通过', value: 'passed', count: counts.passed || 0 },
-        { label: '不通过', value: 'failed', count: counts.failed || 0 },
-        { label: '异常', value: 'error', count: counts.error || 0 }
-      ]
-    }
-  },
   created() {
     this.getList()
   },
@@ -221,10 +198,6 @@ export default {
     },
     handleMonthChange(value) {
       this.queryParams.reportMonth = value || ''
-    },
-    setAuditStatus(status) {
-      this.queryParams.auditStatus = status
-      this.handleQuery()
     },
     handleRowCommand(command, row) {
       if (command === 'preview') this.openPreview(row.latestVersionId)
@@ -317,38 +290,6 @@ export default {
   border: 1px solid #e6ebf2;
 }
 
-.status-strip {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(120px, 1fr));
-  gap: 12px;
-  margin: 0 0 14px;
-}
-
-.status-card {
-  background: #fff;
-  border: 1px solid #e6ebf2;
-  border-radius: 6px;
-  padding: 14px 16px;
-  cursor: pointer;
-}
-
-.status-card.active {
-  border-color: #409eff;
-  box-shadow: 0 0 0 2px rgba(64, 158, 255, 0.12);
-}
-
-.status-card-label {
-  color: #6b778c;
-  font-size: 13px;
-}
-
-.status-card-value {
-  margin-top: 8px;
-  color: #1f2d3d;
-  font-size: 24px;
-  font-weight: 600;
-}
-
 .filter-panel {
   padding: 16px 16px 0;
   border-radius: 6px;
@@ -391,6 +332,10 @@ export default {
   margin-top: 7px;
   color: #8492a6;
   font-size: 12px;
+}
+
+.empty-text {
+  color: #c0c4cc;
 }
 
 .audit-conclusion {
