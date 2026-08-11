@@ -169,20 +169,25 @@ export default {
       uploadForm: {
         uploader: '',
         file: null
-      }
+      },
+      pollTimer: null
     }
   },
   created() {
     this.getList()
   },
+  beforeDestroy() {
+    this.stopPolling()
+  },
   methods: {
-    getList() {
-      this.loading = true
+    getList(silent = false) {
+      if (!silent) this.loading = true
       listReports(this.queryParams).then(response => {
         this.reportList = response.rows || []
         this.total = response.total || 0
+        this.updatePolling()
       }).finally(() => {
-        this.loading = false
+        if (!silent) this.loading = false
       })
     },
     handleQuery() {
@@ -245,6 +250,25 @@ export default {
       }).finally(() => {
         this.uploading = false
       })
+    },
+    updatePolling() {
+      const hasProcessing = this.reportList.some(item => ['pending', 'running'].includes(item.latestAuditStatus))
+      if (hasProcessing) {
+        this.startPolling()
+      } else {
+        this.stopPolling()
+      }
+    },
+    startPolling() {
+      if (this.pollTimer) return
+      this.pollTimer = window.setInterval(() => {
+        this.getList(true)
+      }, 10000)
+    },
+    stopPolling() {
+      if (!this.pollTimer) return
+      window.clearInterval(this.pollTimer)
+      this.pollTimer = null
     },
     suggestionText(row) {
       if (row.latestAuditSuggestion) return row.latestAuditSuggestion

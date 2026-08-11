@@ -10,6 +10,7 @@
           <span>{{ report.createTime || '-' }}</span>
         </div>
       </div>
+      <el-button class="detail-refresh" size="mini" icon="el-icon-refresh" @click="getDetail()">刷新</el-button>
     </div>
 
     <div class="version-summary">
@@ -112,7 +113,8 @@ export default {
       loading: false,
       report: {},
       auditDialogVisible: false,
-      audit: {}
+      audit: {},
+      pollTimer: null
     }
   },
   computed: {
@@ -129,14 +131,37 @@ export default {
   created() {
     this.getDetail()
   },
+  beforeDestroy() {
+    this.stopPolling()
+  },
   methods: {
-    getDetail() {
-      this.loading = true
+    getDetail(silent = false) {
+      if (!silent) this.loading = true
       getReport(this.$route.params.id).then(response => {
         this.report = response
+        this.updatePolling()
       }).finally(() => {
-        this.loading = false
+        if (!silent) this.loading = false
       })
+    },
+    updatePolling() {
+      const hasProcessing = this.versions.some(item => ['pending', 'running'].includes(item.auditStatus))
+      if (hasProcessing) {
+        this.startPolling()
+      } else {
+        this.stopPolling()
+      }
+    },
+    startPolling() {
+      if (this.pollTimer) return
+      this.pollTimer = window.setInterval(() => {
+        this.getDetail(true)
+      }, 10000)
+    },
+    stopPolling() {
+      if (!this.pollTimer) return
+      window.clearInterval(this.pollTimer)
+      this.pollTimer = null
     },
     goBack() {
       this.$router.push({ path: '/report-management/reports' })
@@ -201,6 +226,15 @@ export default {
   align-items: center;
   gap: 14px;
   padding: 18px 20px;
+}
+
+.detail-title-wrap {
+  min-width: 0;
+  flex: 1;
+}
+
+.detail-refresh {
+  flex: none;
 }
 
 .detail-title {
