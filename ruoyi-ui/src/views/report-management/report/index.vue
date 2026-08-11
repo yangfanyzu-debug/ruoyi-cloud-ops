@@ -1,15 +1,5 @@
 <template>
   <div class="app-container report-page">
-    <div class="report-header">
-      <div>
-        <div class="report-title">性能容量报告</div>
-        <div class="report-subtitle">按系统、月份和最新审核状态管理批次生成及人工修订的 DOCX 报告</div>
-      </div>
-      <div class="report-header-actions">
-        <el-button size="small" icon="el-icon-refresh" @click="getList">刷新</el-button>
-      </div>
-    </div>
-
     <div class="status-strip">
       <div
         v-for="item in statusCards"
@@ -24,47 +14,50 @@
     </div>
 
     <div class="filter-panel">
-      <el-form ref="queryForm" :model="queryParams" size="small" :inline="true" label-width="72px">
-        <el-form-item label="系统编码" prop="systemId">
-          <el-input
-            v-model="queryParams.systemId"
-            class="filter-input"
-            placeholder="系统编码"
-            clearable
-            prefix-icon="el-icon-cpu"
-            @keyup.enter.native="handleQuery"
-          />
-        </el-form-item>
-        <el-form-item label="报告标题" prop="title">
-          <el-input
-            v-model="queryParams.title"
-            class="filter-title"
-            placeholder="标题关键字"
-            clearable
-            prefix-icon="el-icon-document"
-            @keyup.enter.native="handleQuery"
-          />
-        </el-form-item>
-        <el-form-item label="报表月份" prop="reportMonth">
-          <el-date-picker
-            v-model="reportMonthValue"
-            class="filter-input"
-            type="month"
-            value-format="yyyy年MM月"
-            placeholder="月份"
-            clearable
-            @change="handleMonthChange"
-          />
-        </el-form-item>
-        <el-form-item>
-          <el-button type="primary" icon="el-icon-search" size="mini" @click="handleQuery">查询</el-button>
-          <el-button icon="el-icon-refresh-left" size="mini" @click="resetQuery">重置</el-button>
-        </el-form-item>
-      </el-form>
+      <div class="filter-main">
+        <el-form ref="queryForm" :model="queryParams" size="small" :inline="true" label-width="68px">
+          <el-form-item label="系统编码" prop="systemId">
+            <el-input
+              v-model="queryParams.systemId"
+              class="filter-input"
+              placeholder="系统编码"
+              clearable
+              prefix-icon="el-icon-cpu"
+              @keyup.enter.native="handleQuery"
+            />
+          </el-form-item>
+          <el-form-item label="报告标题" prop="title">
+            <el-input
+              v-model="queryParams.title"
+              class="filter-title"
+              placeholder="标题关键字"
+              clearable
+              prefix-icon="el-icon-document"
+              @keyup.enter.native="handleQuery"
+            />
+          </el-form-item>
+          <el-form-item label="报表月份" prop="reportMonth">
+            <el-date-picker
+              v-model="reportMonthValue"
+              class="filter-input"
+              type="month"
+              value-format="yyyy年MM月"
+              placeholder="月份"
+              clearable
+              @change="handleMonthChange"
+            />
+          </el-form-item>
+          <el-form-item>
+            <el-button type="primary" icon="el-icon-search" size="mini" @click="handleQuery">查询</el-button>
+            <el-button icon="el-icon-refresh-left" size="mini" @click="resetQuery">重置</el-button>
+            <el-button icon="el-icon-refresh" size="mini" @click="getList">刷新</el-button>
+          </el-form-item>
+        </el-form>
+      </div>
     </div>
 
     <el-table v-loading="loading" :data="reportList" class="report-table" border>
-      <el-table-column label="报告" min-width="360">
+      <el-table-column label="报告" min-width="330">
         <template slot-scope="scope">
           <div class="report-name" @click="openDetail(scope.row)">{{ scope.row.title }}</div>
           <div class="report-meta">
@@ -74,7 +67,7 @@
           </div>
         </template>
       </el-table-column>
-      <el-table-column label="最新审核" width="150">
+      <el-table-column label="最新审核" width="140">
         <template slot-scope="scope">
           <el-tag :type="statusType(scope.row.latestAuditStatus)" size="small">
             {{ statusLabel(scope.row.latestAuditStatus) }}
@@ -82,13 +75,26 @@
           <div class="audit-conclusion">{{ scope.row.latestAuditConclusion || '-' }}</div>
         </template>
       </el-table-column>
-      <el-table-column label="审核建议" min-width="280">
+      <el-table-column label="审核建议" min-width="360">
         <template slot-scope="scope">
-          <span class="suggestion-text">{{ scope.row.latestAuditSuggestion || emptySuggestion(scope.row.latestAuditStatus) }}</span>
+          <div class="suggestion-cell" :class="`suggestion-${scope.row.latestAuditStatus || 'pending'}`">
+            <div class="suggestion-main">
+              {{ suggestionText(scope.row) }}
+            </div>
+            <el-button
+              v-if="scope.row.latestAuditId"
+              type="text"
+              size="mini"
+              class="suggestion-link"
+              @click="openDetail(scope.row)"
+            >
+              查看完整审核
+            </el-button>
+          </div>
         </template>
       </el-table-column>
       <el-table-column label="创建时间" prop="createTime" width="170" />
-      <el-table-column label="操作" width="260" fixed="right">
+      <el-table-column label="操作" width="220" fixed="right">
         <template slot-scope="scope">
           <el-button size="mini" type="primary" plain icon="el-icon-view" @click="openDetail(scope.row)">详情</el-button>
           <el-dropdown trigger="click" @command="command => handleRowCommand(command, scope.row)">
@@ -267,8 +273,15 @@ export default {
         this.uploading = false
       })
     },
-    emptySuggestion(status) {
-      return status === 'error' ? '请查看版本审核详情中的错误原因' : '-'
+    suggestionText(row) {
+      if (row.latestAuditSuggestion) return row.latestAuditSuggestion
+      return {
+        pending: '等待 AI 审核开始',
+        running: 'AI 正在审核，稍后刷新查看结果',
+        passed: '未发现需要调整的问题',
+        failed: '审核未通过，请进入详情查看检查点和修改建议',
+        error: '审核执行失败，请进入详情查看错误原因'
+      }[row.latestAuditStatus] || '暂无审核建议'
     },
     statusLabel(status) {
       return {
@@ -298,38 +311,17 @@ export default {
   min-height: calc(100vh - 84px);
 }
 
-.report-header,
 .filter-panel,
 .report-table {
   background: #fff;
   border: 1px solid #e6ebf2;
 }
 
-.report-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 18px 20px;
-  border-radius: 6px;
-}
-
-.report-title {
-  font-size: 20px;
-  font-weight: 600;
-  color: #1f2d3d;
-}
-
-.report-subtitle {
-  margin-top: 6px;
-  color: #6b778c;
-  font-size: 13px;
-}
-
 .status-strip {
   display: grid;
   grid-template-columns: repeat(5, minmax(120px, 1fr));
   gap: 12px;
-  margin: 14px 0;
+  margin: 0 0 14px;
 }
 
 .status-card {
@@ -363,12 +355,20 @@ export default {
   margin-bottom: 14px;
 }
 
+.filter-main {
+  min-width: 0;
+}
+
+.filter-main /deep/ .el-form-item {
+  margin-bottom: 16px;
+}
+
 .filter-input {
-  width: 180px;
+  width: 160px;
 }
 
 .filter-title {
-  width: 280px;
+  width: 220px;
 }
 
 .report-table {
@@ -399,9 +399,47 @@ export default {
   font-size: 12px;
 }
 
-.suggestion-text {
+.suggestion-cell {
+  position: relative;
+  padding-left: 10px;
+}
+
+.suggestion-cell::before {
+  position: absolute;
+  left: 0;
+  top: 4px;
+  bottom: 4px;
+  width: 3px;
+  border-radius: 3px;
+  background: #dcdfe6;
+  content: '';
+}
+
+.suggestion-error::before,
+.suggestion-failed::before {
+  background: #f56c6c;
+}
+
+.suggestion-passed::before {
+  background: #67c23a;
+}
+
+.suggestion-running::before {
+  background: #e6a23c;
+}
+
+.suggestion-main {
   color: #606266;
   line-height: 20px;
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.suggestion-link {
+  margin-top: 4px;
+  padding: 0;
 }
 
 .upload-target {
