@@ -3,13 +3,30 @@
     <div class="config-toolbar">
       <div>
         <strong>AI审核配置</strong>
-        <span>模型配置保存后仅影响后续审核，历史审核保留当时的配置与检查点快照</span>
+        <span>后续审核将自动组合基础规则与当前启用的业务检查点，历史审核保留当时的配置快照</span>
       </div>
       <el-button icon="el-icon-refresh" size="mini" @click="loadAll">刷新</el-button>
     </div>
 
+    <div class="effective-config">
+      <div class="config-part">
+        <span class="part-icon"><i class="el-icon-connection" /></span>
+        <div><small>模型配置</small><strong>{{ form.modelName || '未配置' }}<em v-if="form.version">v{{ form.version }}</em></strong></div>
+      </div>
+      <i class="el-icon-plus config-operator" />
+      <div class="config-part">
+        <span class="part-icon checkpoint-icon"><i class="el-icon-finished" /></span>
+        <div><small>业务检查点</small><strong>{{ enabledCount }} 项启用</strong></div>
+      </div>
+      <i class="el-icon-right config-operator" />
+      <div class="config-result">
+        <i class="el-icon-circle-check" />
+        <div><small>审核执行方式</small><strong>系统自动组合并固化快照</strong></div>
+      </div>
+    </div>
+
     <el-tabs v-model="activeTab" class="config-tabs">
-      <el-tab-pane label="模型与提示词" name="model">
+      <el-tab-pane label="模型与基础规则" name="model">
         <el-form ref="form" :model="form" :rules="rules" class="config-form" label-width="110px" size="small">
           <div class="section-heading">
             <div><strong>模型连接</strong><span>配置兼容 Chat Completions 的大模型服务</span></div>
@@ -30,9 +47,9 @@
           </el-form-item>
 
           <div class="section-heading prompt-heading">
-            <div><strong>基础提示词</strong><span>描述审核角色、范围和表达要求，检查项目由“审核检查点”单独维护</span></div>
+            <div><strong>基础审核规则</strong><span>仅维护角色、审核范围和输出要求，无需在这里重复填写业务检查项</span></div>
           </div>
-          <el-form-item label="提示词" prop="promptContent">
+          <el-form-item label="基础规则" prop="promptContent">
             <el-input
               v-model="form.promptContent"
               type="textarea"
@@ -48,12 +65,12 @@
       </el-tab-pane>
 
       <el-tab-pane name="checkpoints">
-        <span slot="label">审核检查点 <el-badge :value="enabledCount" :max="99" class="checkpoint-badge" /></span>
+        <span slot="label">业务检查点 <el-badge :value="enabledCount" :max="99" class="checkpoint-badge" /></span>
         <div class="checkpoint-panel">
           <div class="checkpoint-toolbar">
             <div>
-              <strong>审核检查点</strong>
-              <span>审核任务开始时会固化当前启用项，修改不会影响历史结果</span>
+              <strong>业务检查点</strong>
+              <span>当前启用项会动态注入后续审核，并在任务开始时固化为检查点快照</span>
             </div>
             <el-button type="primary" size="mini" icon="el-icon-plus" @click="openCheckpointDialog()">新增检查点</el-button>
           </div>
@@ -198,6 +215,17 @@ export default {
 .config-toolbar { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
 .config-toolbar strong,.config-toolbar span,.section-heading strong,.section-heading span,.checkpoint-toolbar strong,.checkpoint-toolbar span { display:block; }
 .config-toolbar strong { color:#1f2d3d; font-size:16px; }.config-toolbar span { margin-top:4px; color:#7f8c99; font-size:12px; }
+.effective-config { display:flex; align-items:center; min-height:72px; padding:0 20px; margin-bottom:12px; box-sizing:border-box; background:#fff; border:1px solid #e4e9f0; border-left:3px solid #409eff; border-radius:5px; }
+.config-part,.config-result { display:flex; align-items:center; min-width:0; gap:10px; }
+.config-part { flex:0 1 250px; }.config-result { flex:1; }
+.part-icon { display:grid; flex:none; width:32px; height:32px; place-items:center; color:#2879bc; background:#eaf4fc; border-radius:4px; }
+.checkpoint-icon { color:#527552; background:#edf6ed; }
+.config-part small,.config-part strong,.config-result small,.config-result strong { display:block; }
+.config-part small,.config-result small { margin-bottom:3px; color:#8794a1; font-size:11px; }
+.config-part strong,.config-result strong { overflow:hidden; color:#344454; font-size:13px; text-overflow:ellipsis; white-space:nowrap; }
+.config-part em { margin-left:7px; color:#7d8b98; font-size:11px; font-style:normal; font-weight:400; }
+.config-operator { flex:none; margin:0 26px; color:#a4afba; font-size:14px; }
+.config-result > i { color:#67c23a; font-size:24px; }
 .config-tabs { padding:0 20px 20px; background:#fff; border:1px solid #e4e9f0; border-radius:6px; }
 .config-tabs /deep/ .el-tabs__header { margin-bottom:18px; }.checkpoint-badge { margin-left:5px; }
 .checkpoint-badge /deep/ .el-badge__content { top:3px; }
@@ -210,4 +238,5 @@ export default {
 .checkpoint-table /deep/ th { background:#f7f9fc; color:#52616f; }.checkpoint-table /deep/::before { display:none; }
 .order-mark { display:inline-grid; min-width:28px; height:22px; place-items:center; color:#60758a; background:#edf3f7; border-radius:3px; font-size:12px; }
 .checkpoint-name { color:#303a45; font-size:13px; }.checkpoint-empty { padding:40px 0; color:#9aa6b2; }
+@media (max-width:1100px) { .config-operator { margin:0 14px; }.config-part { flex-basis:210px; } }
 </style>
