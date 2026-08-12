@@ -3,7 +3,7 @@
     <div class="filter-panel">
       <div class="filter-main">
         <el-form ref="queryForm" :model="queryParams" size="small" :inline="true" label-width="64px" class="query-form">
-          <el-form-item label="系统编码" prop="systemId">
+          <el-form-item label="系统" prop="systemId">
             <el-input
               v-model="queryParams.systemId"
               class="filter-input"
@@ -23,7 +23,7 @@
               @keyup.enter.native="handleQuery"
             />
           </el-form-item>
-          <el-form-item label="报表月份" prop="reportMonth">
+          <el-form-item label="月份" prop="reportMonth">
             <el-date-picker
               v-model="reportMonthValue"
               class="filter-input"
@@ -34,7 +34,7 @@
               @change="handleMonthChange"
             />
           </el-form-item>
-          <el-form-item label="审核状态" prop="auditStatus">
+          <el-form-item label="状态" prop="auditStatus">
             <el-select v-model="queryParams.auditStatus" class="filter-status" placeholder="全部状态" clearable>
               <el-option label="待审核" value="pending" />
               <el-option label="审核中" value="running" />
@@ -577,20 +577,25 @@ export default {
 
 .filter-main /deep/ .el-form-item {
   flex: none;
-  margin-right: 10px;
+  margin-right: 8px;
   margin-bottom: 12px;
 }
 
+.filter-main /deep/ .el-form-item__label {
+  padding-right: 8px;
+  white-space: nowrap;
+}
+
 .filter-input {
-  width: 132px;
+  width: 120px;
 }
 
 .filter-title {
-  width: 172px;
+  width: 160px;
 }
 
 .filter-status {
-  width: 132px;
+  width: 120px;
 }
 
 .filter-main /deep/ .query-actions {
@@ -854,7 +859,7 @@ export default {
 
 @media (max-width: 1280px) {
   .filter-title {
-    width: 150px;
+    width: 140px;
   }
 
   .filter-main /deep/ .el-form-item {
