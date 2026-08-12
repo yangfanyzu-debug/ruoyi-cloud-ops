@@ -58,6 +58,22 @@ export function getAuditConversation(reportId) {
   })
 }
 
+export function getAgentMessages(reportId, versionId) {
+  return request({
+    url: `/report-management-api/audits/reports/${reportId}/versions/${versionId}/messages`,
+    method: 'get',
+    headers: { showError: false }
+  })
+}
+
+export function sendAgentMessage(reportId, versionId, content) {
+  return request({
+    url: `/report-management-api/audits/reports/${reportId}/versions/${versionId}/messages`,
+    method: 'post',
+    data: { content }
+  })
+}
+
 export function previewUrl(versionId) {
   return `${process.env.VUE_APP_BASE_API}/report-management-api/versions/${versionId}/preview`
 }
