@@ -112,6 +112,12 @@ export const constantRoutes = [
     component: () => import('@/views/report-management/preview/index'),
     hidden: true,
     meta: { title: 'DOCX预览' }
+  },
+  {
+    path: '/report-management/audit-workbench/:reportId',
+    component: () => import('@/views/report-management/audit-workbench/index'),
+    hidden: true,
+    meta: { title: 'AI审核工作台' }
   }
 ]
 

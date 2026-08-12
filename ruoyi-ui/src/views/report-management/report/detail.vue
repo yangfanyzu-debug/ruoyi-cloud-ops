@@ -54,7 +54,7 @@
             type="text"
             size="mini"
             icon="el-icon-loading"
-            @click="openAuditProcess(scope.row.latestAuditId)"
+            @click="openAuditView(scope.row.latestAuditId, scope.row.auditStatus)"
           >AI审核中</el-button>
           <el-tag v-else :type="statusType(scope.row.auditStatus)" size="small">
             {{ statusLabel(scope.row.auditStatus) }}
@@ -195,11 +195,11 @@ export default {
       })
     },
     openAuditView(auditId, status) {
-      if (this.isAuditProcessing(status)) {
-        this.openAuditProcess(auditId)
-      } else {
-        this.openAudit(auditId)
-      }
+      const route = this.$router.resolve({
+        path: `/report-management/audit-workbench/${this.report.id}`,
+        query: { auditId }
+      })
+      window.open(route.href, '_blank')
     },
     openAuditProcess(auditId) {
       this.$refs.auditProcessDialog.open(auditId)
@@ -216,6 +216,7 @@ export default {
         running: '审核中',
         passed: '审核通过',
         failed: '审核不通过',
+        completed: '审核完成',
         error: '审核失败'
       }[status] || '待审核'
     },
@@ -228,6 +229,7 @@ export default {
         running: 'warning',
         passed: 'success',
         failed: 'danger',
+        completed: '',
         error: 'danger'
       }[status] || 'info'
     }

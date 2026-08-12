@@ -40,6 +40,7 @@
               <el-option label="审核中" value="running" />
               <el-option label="审核通过" value="passed" />
               <el-option label="审核不通过" value="failed" />
+              <el-option label="审核完成" value="completed" />
               <el-option label="审核失败" value="error" />
             </el-select>
           </el-form-item>
@@ -107,7 +108,7 @@
                 v-if="isAuditProcessing(scope.row.latestAuditStatus) && scope.row.latestAuditId"
                 type="button"
                 class="audit-processing-trigger"
-                @click.stop="openAuditProcess(scope.row.latestAuditId)"
+                @click.stop="openAuditView(scope.row.latestAuditId, scope.row.latestAuditStatus)"
               >
                 <span class="audit-pulse" aria-hidden="true"><i /><i /><i /></span>
                 AI审核中
@@ -250,7 +251,7 @@
                   v-if="isAuditProcessing(scope.row.auditStatus) && scope.row.latestAuditId"
                   type="button"
                   class="audit-processing-trigger"
-                  @click.stop="openAuditProcess(scope.row.latestAuditId)"
+                  @click.stop="openAuditView(scope.row.latestAuditId, scope.row.auditStatus)"
                 >
                   <span class="audit-pulse" aria-hidden="true"><i /><i /><i /></span>
                   AI审核中
@@ -438,11 +439,14 @@ export default {
       })
     },
     openAuditView(auditId, status) {
-      if (this.isAuditProcessing(status)) {
-        this.openAuditProcess(auditId)
-      } else {
-        this.openAudit(auditId)
-      }
+      const report = this.reportList.find(item => item.latestAuditId === auditId)
+      const reportId = report ? report.id : this.detailReport.id
+      if (!reportId) return
+      const route = this.$router.resolve({
+        path: `/report-management/audit-workbench/${reportId}`,
+        query: { auditId }
+      })
+      window.open(route.href, '_blank')
     },
     openAuditProcess(auditId) {
       this.$refs.auditProcessDialog.open(auditId)
@@ -512,6 +516,7 @@ export default {
         running: '正在解析报告并生成结论',
         passed: '未发现明显问题',
         failed: '请查看检查点和修改建议',
+        completed: '审核已完成，请查看完整结果',
         error: '审核执行异常，请查看错误信息'
       }[row.latestAuditStatus] || '暂无审核信息'
     },
@@ -521,6 +526,7 @@ export default {
         running: '正在处理',
         passed: '通过',
         failed: '不通过',
+        completed: '已完成',
         error: '执行失败'
       }[status] || '等待处理'
     },
@@ -548,6 +554,7 @@ export default {
         running: '审核中',
         passed: '审核通过',
         failed: '审核不通过',
+        completed: '审核完成',
         error: '审核失败'
       }[status] || '待审核'
     },
@@ -557,6 +564,7 @@ export default {
         running: 'warning',
         passed: 'success',
         failed: 'danger',
+        completed: '',
         error: 'danger'
       }[status] || 'info'
     }
