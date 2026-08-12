@@ -41,6 +41,15 @@ export function getAudit(auditId) {
   })
 }
 
+export function getAuditEvents(auditId, afterId = 0) {
+  return request({
+    url: `/report-management-api/audits/${auditId}/events`,
+    method: 'get',
+    params: { afterId },
+    headers: { showError: false }
+  })
+}
+
 export function previewUrl(versionId) {
   return `${process.env.VUE_APP_BASE_API}/report-management-api/versions/${versionId}/preview`
 }

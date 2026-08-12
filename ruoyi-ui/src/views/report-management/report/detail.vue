@@ -49,7 +49,14 @@
       </el-table-column>
       <el-table-column label="审核" width="150">
         <template slot-scope="scope">
-          <el-tag :type="statusType(scope.row.auditStatus)" size="small">
+          <el-button
+            v-if="isAuditProcessing(scope.row.auditStatus) && scope.row.latestAuditId"
+            type="text"
+            size="mini"
+            icon="el-icon-loading"
+            @click="openAuditProcess(scope.row.latestAuditId)"
+          >AI审核中</el-button>
+          <el-tag v-else :type="statusType(scope.row.auditStatus)" size="small">
             {{ statusLabel(scope.row.auditStatus) }}
           </el-tag>
           <div class="audit-conclusion">{{ scope.row.latestAuditConclusion || '-' }}</div>
@@ -64,8 +71,8 @@
             size="mini"
             icon="el-icon-reading"
             :disabled="!scope.row.latestAuditId"
-            @click="openAudit(scope.row.latestAuditId)"
-          >审核结果</el-button>
+            @click="openAuditView(scope.row.latestAuditId, scope.row.auditStatus)"
+          >{{ isAuditProcessing(scope.row.auditStatus) ? '审核过程' : '审核结果' }}</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -100,14 +107,22 @@
         <el-table-column label="分析结果" prop="分析结果" min-width="400" show-overflow-tooltip />
       </el-table>
     </el-dialog>
+
+    <audit-process-dialog
+      ref="auditProcessDialog"
+      @completed="getDetail(true)"
+      @show-result="openAudit"
+    />
   </div>
 </template>
 
 <script>
 import { downloadUrl, getAudit, getReport } from '@/api/report-management/report'
+import AuditProcessDialog from './components/AuditProcessDialog.vue'
 
 export default {
   name: 'ReportManagementDetail',
+  components: { AuditProcessDialog },
   data() {
     return {
       loading: false,
@@ -179,6 +194,16 @@ export default {
         this.auditDialogVisible = true
       })
     },
+    openAuditView(auditId, status) {
+      if (this.isAuditProcessing(status)) {
+        this.openAuditProcess(auditId)
+      } else {
+        this.openAudit(auditId)
+      }
+    },
+    openAuditProcess(auditId) {
+      this.$refs.auditProcessDialog.open(auditId)
+    },
     formatSize(size) {
       if (!size) return '0 B'
       if (size < 1024) return `${size} B`
@@ -193,6 +218,9 @@ export default {
         failed: '审核不通过',
         error: '审核失败'
       }[status] || '待审核'
+    },
+    isAuditProcessing(status) {
+      return ['pending', 'running'].includes(status)
     },
     statusType(status) {
       return {

@@ -79,16 +79,25 @@
       <el-table-column label="审核" width="210">
         <template slot-scope="scope">
           <div class="audit-brief">
-            <el-tag :type="statusType(scope.row.latestAuditStatus)" size="mini">
+            <button
+              v-if="isAuditProcessing(scope.row.latestAuditStatus) && scope.row.latestAuditId"
+              type="button"
+              class="audit-processing-trigger"
+              @click.stop="openAuditProcess(scope.row.latestAuditId)"
+            >
+              <span class="audit-pulse" aria-hidden="true"><i /><i /><i /></span>
+              AI审核中
+            </button>
+            <el-tag v-else :type="statusType(scope.row.latestAuditStatus)" size="mini">
               {{ statusLabel(scope.row.latestAuditStatus) }}
             </el-tag>
             <span class="audit-conclusion">{{ scope.row.latestAuditConclusion || statusHint(scope.row.latestAuditStatus) }}</span>
             <el-button
-              v-if="scope.row.latestAuditId"
+              v-if="scope.row.latestAuditId && !isAuditProcessing(scope.row.latestAuditStatus)"
               type="text"
               size="mini"
               class="suggestion-link"
-              @click="openDetail(scope.row)"
+              @click="openAudit(scope.row.latestAuditId)"
             >
               审核结果
             </el-button>
@@ -194,7 +203,16 @@
           <el-table-column label="审核" width="210">
             <template slot-scope="scope">
               <div class="audit-brief">
-                <el-tag :type="statusType(scope.row.auditStatus)" size="mini">
+                <button
+                  v-if="isAuditProcessing(scope.row.auditStatus) && scope.row.latestAuditId"
+                  type="button"
+                  class="audit-processing-trigger"
+                  @click.stop="openAuditProcess(scope.row.latestAuditId)"
+                >
+                  <span class="audit-pulse" aria-hidden="true"><i /><i /><i /></span>
+                  AI审核中
+                </button>
+                <el-tag v-else :type="statusType(scope.row.auditStatus)" size="mini">
                   {{ statusLabel(scope.row.auditStatus) }}
                 </el-tag>
                 <span class="audit-conclusion">{{ scope.row.latestAuditConclusion || statusHint(scope.row.auditStatus) }}</span>
@@ -210,8 +228,8 @@
                   size="mini"
                   icon="el-icon-reading"
                   :disabled="!scope.row.latestAuditId"
-                  @click="openAudit(scope.row.latestAuditId)"
-                >审核结果</el-button>
+                  @click="openAuditView(scope.row.latestAuditId, scope.row.auditStatus)"
+                >{{ isAuditProcessing(scope.row.auditStatus) ? '审核过程' : '审核结果' }}</el-button>
               </div>
             </template>
           </el-table-column>
@@ -251,14 +269,22 @@
         <el-table-column label="分析结果" prop="分析结果" min-width="400" show-overflow-tooltip />
       </el-table>
     </el-dialog>
+
+    <audit-process-dialog
+      ref="auditProcessDialog"
+      @completed="handleAuditProcessCompleted"
+      @show-result="openAudit"
+    />
   </div>
 </template>
 
 <script>
 import { downloadUrl, getAudit, getReport, listReports, uploadReportVersion } from '@/api/report-management/report'
+import AuditProcessDialog from './components/AuditProcessDialog.vue'
 
 export default {
   name: 'ReportManagement',
+  components: { AuditProcessDialog },
   data() {
     return {
       loading: false,
@@ -354,6 +380,20 @@ export default {
         this.auditDialogVisible = true
       })
     },
+    openAuditView(auditId, status) {
+      if (this.isAuditProcessing(status)) {
+        this.openAuditProcess(auditId)
+      } else {
+        this.openAudit(auditId)
+      }
+    },
+    openAuditProcess(auditId) {
+      this.$refs.auditProcessDialog.open(auditId)
+    },
+    handleAuditProcessCompleted() {
+      this.getList(true)
+      if (this.detailDialogVisible && this.detailReport.id) this.loadDetail(this.detailReport.id, true)
+    },
     downloadVersion(versionId) {
       window.open(downloadUrl(versionId), '_blank')
     },
@@ -426,6 +466,9 @@ export default {
         failed: '不通过',
         error: '执行失败'
       }[status] || '等待处理'
+    },
+    isAuditProcessing(status) {
+      return ['pending', 'running'].includes(status)
     },
     versionTypeLabel(type) {
       return {
@@ -582,6 +625,53 @@ export default {
   min-width: 0;
 }
 
+.audit-processing-trigger {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 8px;
+  color: #8a5a00;
+  background: #fff8e6;
+  border: 1px solid #f2cf85;
+  border-radius: 4px;
+  font-size: 12px;
+  line-height: 22px;
+  cursor: pointer;
+}
+
+.audit-processing-trigger:hover,
+.audit-processing-trigger:focus {
+  color: #6f4700;
+  background: #fff2cc;
+  border-color: #e6b95d;
+  outline: none;
+}
+
+.audit-pulse {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 8px;
+}
+
+.audit-pulse i {
+  width: 4px;
+  height: 4px;
+  background: currentColor;
+  border-radius: 50%;
+  animation: audit-dot 1.2s ease-in-out infinite;
+}
+
+.audit-pulse i:nth-child(2) {
+  animation-delay: .16s;
+}
+
+.audit-pulse i:nth-child(3) {
+  animation-delay: .32s;
+}
+
 .audit-conclusion {
   color: #1f2d3d;
   font-size: 12px;
@@ -688,6 +778,17 @@ export default {
 
 .audit-table {
   margin-top: 14px;
+}
+
+@keyframes audit-dot {
+  0%, 60%, 100% { opacity: .35; transform: translateY(0); }
+  30% { opacity: 1; transform: translateY(-3px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .audit-pulse i {
+    animation: none;
+  }
 }
 
 .upload-target {
