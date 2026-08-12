@@ -65,7 +65,7 @@
             icon="el-icon-reading"
             :disabled="!scope.row.latestAuditId"
             @click="openAudit(scope.row.latestAuditId)"
-          >审核</el-button>
+          >审核结果</el-button>
         </template>
       </el-table-column>
     </el-table>
