@@ -45,8 +45,8 @@
       <aside class="conversation-pane">
         <div class="conversation-head">
           <div>
-            <strong>AI审核记录</strong>
-            <span>共 {{ versions.length }} 个报告版本</span>
+            <strong>审核记录与报告 Agent</strong>
+            <span>{{ currentVersion ? `当前查看 v${currentVersion.versionNo}` : '请选择报告版本' }}</span>
           </div>
           <el-tag :type="statusType(currentVersion && currentVersion.auditStatus)" size="mini">
             {{ statusLabel(currentVersion && currentVersion.auditStatus) }}
@@ -88,7 +88,7 @@
                   <div class="typing-line"><i /><i /><i /></div>
                   <span>{{ version.auditStatus === 'pending' ? '等待后台审核任务' : '正在分析当前报告' }}</span>
                 </div>
-                <pre v-if="messageText(version)" class="audit-text">{{ messageText(version) }}</pre>
+                <audit-markdown v-if="messageText(version)" :content="messageText(version)" />
                 <el-alert
                   v-if="version.errorMessage"
                   :title="version.errorMessage"
@@ -130,7 +130,7 @@
                   <div class="typing-line"><i /><i /><i /></div>
                   <span>{{ message.status === 'pending' ? '等待 Agent 响应' : '正在生成回复' }}</span>
                 </div>
-                <pre v-if="message.content" class="audit-text">{{ message.content }}</pre>
+                <audit-markdown v-if="message.content" :content="message.content" />
                 <el-alert
                   v-if="message.errorMessage"
                   :title="message.errorMessage"
@@ -174,6 +174,7 @@
 <script>
 import VueOfficeDocx from '@vue-office/docx'
 import '@vue-office/docx/lib/index.css'
+import AuditMarkdown from './AuditMarkdown.vue'
 import {
   downloadUrl,
   getAgentMessages,
@@ -185,7 +186,7 @@ import {
 
 export default {
   name: 'ReportAuditWorkbench',
-  components: { VueOfficeDocx },
+  components: { AuditMarkdown, VueOfficeDocx },
   data() {
     return {
       loading: false,
@@ -354,38 +355,40 @@ export default {
 .conversation-head strong,.conversation-head span { display:block; }
 .conversation-head strong { font-size:14px; }
 .conversation-head div > span { margin-top:4px; color:var(--muted); font-size:12px; }
-.conversation-scroll { flex:1 1 auto; min-height:0; overflow-y:auto; padding:18px 16px 36px; box-sizing:border-box; scroll-behavior:smooth; }
+.conversation-scroll { flex:1 1 auto; min-height:0; overflow-y:auto; padding:14px 15px 26px; box-sizing:border-box; scroll-behavior:smooth; }
 .conversation-empty { display:flex; align-items:center; justify-content:center; flex-direction:column; height:100%; gap:8px; color:#9aa6b2; }
 .conversation-empty i { font-size:30px; }
-.version-thread { padding:12px 10px 4px; margin-bottom:14px; border:1px solid transparent; border-radius:6px; cursor:pointer; transition:background .16s,border-color .16s; }
-.version-thread:hover { background:#fff; border-color:#dfe7ef; }
-.version-thread.active { background:#fff; border-color:#9bc4e7; box-shadow:0 2px 9px rgba(43,91,132,.08); }
+.version-thread { position:relative; padding:10px 8px 6px 13px; margin-bottom:8px; border-left:2px solid #dce4ec; cursor:pointer; transition:background .16s,border-color .16s; }
+.version-thread:hover { background:#f1f5f8; border-left-color:#9bbbd5; }
+.version-thread.active { background:#fff; border-left-color:#409eff; box-shadow:0 1px 5px rgba(43,91,132,.07); }
 .message { display:flex; align-items:flex-start; gap:9px; margin-bottom:13px; }
 .message-avatar { display:grid; flex:none; width:28px; height:28px; place-items:center; color:#60758a; background:#fff; border:1px solid #dce4ec; border-radius:50%; font-size:12px; }
-.message-content { min-width:0; flex:1; padding:9px 11px; background:#fff; border:1px solid #e1e7ee; border-radius:2px 6px 6px 6px; }
+.message-content { min-width:0; flex:1; padding:10px 12px; background:#fff; border:1px solid #e1e7ee; border-radius:2px 6px 6px 6px; box-shadow:0 1px 2px rgba(35,54,72,.03); }
 .message-meta { display:flex; align-items:center; justify-content:space-between; gap:8px; color:#8995a2; font-size:11px; }
 .message-meta strong { color:#52616f; font-size:12px; }
 .message-content p { margin:7px 0 3px; font-size:13px; }
 .message-content small { display:block; overflow:hidden; color:var(--muted); font-size:11px; text-overflow:ellipsis; white-space:nowrap; }
-.message-ai { margin-left:20px; }
+.message-ai { margin-left:20px; margin-bottom:8px; }
 .ai-avatar { color:#fff; background:#2879bc; border-color:#2879bc; font-weight:600; }
-.ai-content { background:#eef6fc; border-color:#cfe2f2; }
-.audit-text { margin:8px 0 0; color:#303a45; font-family:inherit; font-size:13px; line-height:21px; overflow-wrap:anywhere; white-space:pre-wrap; }
+.ai-content { background:#f2f7fb; border-color:#cfdfec; }
+.ai-content /deep/ .audit-markdown { margin-top:9px; }
 .streaming-state { display:flex; align-items:center; gap:9px; margin-top:9px; color:#5d7184; font-size:12px; }
 .typing-line { display:inline-flex; gap:3px; }
 .typing-line i { width:5px; height:5px; background:#409eff; border-radius:50%; animation:typing 1.1s ease-in-out infinite; }
 .typing-line i:nth-child(2) { animation-delay:.14s; }.typing-line i:nth-child(3) { animation-delay:.28s; }
 .checkpoint-note { margin-top:10px; padding-top:8px; color:#7e8c99; border-top:1px solid #d7e5f0; font-size:11px; }
-.agent-thread { padding-top:4px; border-top:1px solid #dfe5ec; }
-.agent-thread-title { display:flex; align-items:baseline; justify-content:space-between; gap:10px; padding:14px 4px; }
+.agent-thread { padding-top:6px; margin-top:12px; border-top:1px solid #dfe5ec; }
+.agent-thread-title { display:flex; align-items:baseline; justify-content:space-between; gap:10px; padding:14px 3px 12px; }
 .agent-thread-title span { color:#344454; font-size:13px; font-weight:600; }
 .agent-thread-title small { color:#8995a2; font-size:11px; }
 .agent-empty { padding:18px 12px; margin-bottom:12px; color:#8794a1; background:#fff; border:1px dashed #d7e0e9; border-radius:5px; font-size:12px; text-align:center; }
-.agent-message { display:flex; align-items:flex-start; gap:9px; margin-bottom:13px; }
-.agent-message-user { padding-left:38px; flex-direction:row-reverse; }
-.agent-message-user .message-content { background:#f0f7ff; border-color:#cfe2f5; border-radius:6px 2px 6px 6px; }
+.agent-message { display:flex; align-items:flex-start; gap:9px; margin-bottom:15px; }
+.agent-message .message-content { max-width:calc(100% - 38px); }
+.agent-message-user { padding-left:42px; flex-direction:row-reverse; }
+.agent-message-user .message-content { background:#eaf4ff; border-color:#bdd8f0; border-radius:6px 2px 6px 6px; }
 .agent-message-user .message-meta { flex-direction:row-reverse; }
-.agent-composer { flex:0 0 auto; padding:10px 12px 9px; box-sizing:border-box; background:#fff; border-top:1px solid var(--line); }
+.agent-message-assistant .message-content { border-radius:2px 6px 6px 6px; }
+.agent-composer { flex:0 0 auto; padding:11px 13px 10px; box-sizing:border-box; background:#fff; border-top:1px solid var(--line); box-shadow:0 -2px 8px rgba(42,60,76,.04); }
 .agent-composer /deep/ .el-textarea__inner { min-height:54px!important; padding:8px 10px; border-radius:5px; font-family:inherit; line-height:19px; }
 .composer-actions { display:flex; align-items:center; justify-content:space-between; margin-top:7px; }
 .composer-actions > span { color:#9aa6b2; font-size:11px; }
