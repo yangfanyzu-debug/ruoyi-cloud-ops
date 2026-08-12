@@ -46,74 +46,117 @@
           <el-form-item>
             <el-button type="primary" icon="el-icon-search" size="mini" @click="handleQuery">查询</el-button>
             <el-button icon="el-icon-refresh-left" size="mini" @click="resetQuery">重置</el-button>
-            <el-button icon="el-icon-refresh" size="mini" @click="getList">刷新</el-button>
           </el-form-item>
         </el-form>
       </div>
+      <div class="result-toolbar">
+        <span class="result-count">共 <strong>{{ total }}</strong> 份报告</span>
+        <span v-if="hasActiveFilters" class="filter-applied">已按条件筛选</span>
+        <el-tooltip content="刷新列表" placement="top">
+          <el-button
+            class="refresh-button"
+            icon="el-icon-refresh"
+            size="mini"
+            :loading="loading"
+            aria-label="刷新列表"
+            @click="getList"
+          />
+        </el-tooltip>
+      </div>
     </div>
 
-    <el-table v-loading="loading" :data="reportList" class="report-table" border :row-class-name="tableRowClassName">
-      <el-table-column label="报告信息" min-width="460">
+    <el-table v-loading="loading" :data="reportList" class="report-table" :row-class-name="tableRowClassName">
+      <el-table-column label="报告" min-width="320">
         <template slot-scope="scope">
           <div class="report-cell">
             <div class="report-name" @click="openDetail(scope.row)">{{ scope.row.title }}</div>
             <div class="report-meta">
-              <span><i class="el-icon-cpu" /> {{ scope.row.systemId || '-' }}</span>
-              <span><i class="el-icon-date" /> {{ scope.row.reportMonth || '-' }}</span>
+              <span class="system-code"><i class="el-icon-cpu" /> {{ scope.row.systemId || '-' }}</span>
               <span><i class="el-icon-time" /> {{ scope.row.createTime || '-' }}</span>
-            </div>
-            <div class="jira-line">
-              <span class="jira-label">JIRA</span>
-              <el-tag v-if="scope.row.jiraId" size="mini" effect="plain">{{ scope.row.jiraId }}</el-tag>
-              <span v-else class="empty-text">未关联</span>
             </div>
           </div>
         </template>
       </el-table-column>
-      <el-table-column label="版本" width="92" align="center">
+      <el-table-column label="报告月份" width="116">
         <template slot-scope="scope">
-          <el-tag size="mini" effect="plain">{{ scope.row.latestVersionNo ? `v${scope.row.latestVersionNo}` : '-' }}</el-tag>
+          <span class="month-text">{{ scope.row.reportMonth || '-' }}</span>
+        </template>
+      </el-table-column>
+      <el-table-column label="JIRA任务" min-width="148">
+        <template slot-scope="scope">
+          <el-tooltip v-if="scope.row.jiraId" :content="scope.row.jiraId" placement="top">
+            <div class="jira-ticket">
+              <i class="el-icon-tickets" />
+              <span>{{ scope.row.jiraId }}</span>
+            </div>
+          </el-tooltip>
+          <span v-else class="empty-text">未关联</span>
+        </template>
+      </el-table-column>
+      <el-table-column label="版本" width="86" align="center">
+        <template slot-scope="scope">
+          <span class="version-badge">{{ scope.row.latestVersionNo ? `v${scope.row.latestVersionNo}` : '-' }}</span>
           <div class="version-type">{{ versionTypeLabel(scope.row.latestVersionType) }}</div>
         </template>
       </el-table-column>
-      <el-table-column label="审核" width="210">
+      <el-table-column label="AI审核" min-width="220">
         <template slot-scope="scope">
-          <div class="audit-brief">
-            <button
-              v-if="isAuditProcessing(scope.row.latestAuditStatus) && scope.row.latestAuditId"
-              type="button"
-              class="audit-processing-trigger"
-              @click.stop="openAuditProcess(scope.row.latestAuditId)"
-            >
-              <span class="audit-pulse" aria-hidden="true"><i /><i /><i /></span>
-              AI审核中
-            </button>
-            <el-tag v-else :type="statusType(scope.row.latestAuditStatus)" size="mini">
-              {{ statusLabel(scope.row.latestAuditStatus) }}
-            </el-tag>
-            <span class="audit-conclusion">{{ scope.row.latestAuditConclusion || statusHint(scope.row.latestAuditStatus) }}</span>
+          <div class="audit-cell-content">
+            <div class="audit-status-line">
+              <button
+                v-if="isAuditProcessing(scope.row.latestAuditStatus) && scope.row.latestAuditId"
+                type="button"
+                class="audit-processing-trigger"
+                @click.stop="openAuditProcess(scope.row.latestAuditId)"
+              >
+                <span class="audit-pulse" aria-hidden="true"><i /><i /><i /></span>
+                AI审核中
+              </button>
+              <el-tag v-else :type="statusType(scope.row.latestAuditStatus)" size="mini">
+                {{ statusLabel(scope.row.latestAuditStatus) }}
+              </el-tag>
+            </div>
+            <el-tooltip :content="auditSummaryText(scope.row)" placement="top" :disabled="!auditSummaryText(scope.row)">
+              <div class="audit-summary-text">{{ auditSummaryText(scope.row) }}</div>
+            </el-tooltip>
             <el-button
-              v-if="scope.row.latestAuditId && !isAuditProcessing(scope.row.latestAuditStatus)"
+              v-if="scope.row.latestAuditId"
               type="text"
               size="mini"
               class="suggestion-link"
-              @click="openAudit(scope.row.latestAuditId)"
+              @click="openAuditView(scope.row.latestAuditId, scope.row.latestAuditStatus)"
             >
-              审核结果
+              {{ isAuditProcessing(scope.row.latestAuditStatus) ? '查看审核过程' : '查看审核结果' }}
+              <i class="el-icon-arrow-right" />
             </el-button>
           </div>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="248">
+      <el-table-column label="操作" width="196" align="right">
         <template slot-scope="scope">
           <div class="row-actions">
-            <el-button size="mini" type="primary" plain icon="el-icon-view" @click="openDetail(scope.row)">详情</el-button>
-            <el-button size="mini" icon="el-icon-document" :disabled="!scope.row.latestVersionId" @click="openPreview(scope.row.latestVersionId)">预览</el-button>
-            <el-button size="mini" icon="el-icon-download" :disabled="!scope.row.latestVersionId" @click="downloadVersion(scope.row.latestVersionId)">下载</el-button>
-            <el-button size="mini" icon="el-icon-upload2" @click="openUpload(scope.row)">上传</el-button>
+            <el-button size="mini" type="primary" plain @click="openDetail(scope.row)">详情</el-button>
+            <div class="icon-actions">
+              <el-tooltip content="预览最新版本" placement="top">
+                <el-button size="mini" icon="el-icon-document" :disabled="!scope.row.latestVersionId" aria-label="预览最新版本" @click="openPreview(scope.row.latestVersionId)" />
+              </el-tooltip>
+              <el-tooltip content="下载最新版本" placement="top">
+                <el-button size="mini" icon="el-icon-download" :disabled="!scope.row.latestVersionId" aria-label="下载最新版本" @click="downloadVersion(scope.row.latestVersionId)" />
+              </el-tooltip>
+              <el-tooltip content="上传修订版本" placement="top">
+                <el-button size="mini" icon="el-icon-upload2" aria-label="上传修订版本" @click="openUpload(scope.row)" />
+              </el-tooltip>
+            </div>
           </div>
         </template>
       </el-table-column>
+      <template slot="empty">
+        <div class="report-empty">
+          <i class="el-icon-document" />
+          <div class="report-empty-title">暂无符合条件的报告</div>
+          <el-button v-if="hasActiveFilters" type="text" @click="resetQuery">清除筛选条件</el-button>
+        </div>
+      </template>
     </el-table>
 
     <pagination
@@ -222,14 +265,20 @@
           <el-table-column label="操作" width="260">
             <template slot-scope="scope">
               <div class="row-actions compact-actions">
-                <el-button size="mini" icon="el-icon-document" @click="openPreview(scope.row.id)">预览</el-button>
-                <el-button size="mini" icon="el-icon-download" @click="downloadVersion(scope.row.id)">下载</el-button>
                 <el-button
                   size="mini"
+                  type="primary"
+                  plain
                   icon="el-icon-reading"
                   :disabled="!scope.row.latestAuditId"
                   @click="openAuditView(scope.row.latestAuditId, scope.row.auditStatus)"
                 >{{ isAuditProcessing(scope.row.auditStatus) ? '审核过程' : '审核结果' }}</el-button>
+                <el-tooltip content="在线预览" placement="top">
+                  <el-button size="mini" icon="el-icon-document" aria-label="在线预览" @click="openPreview(scope.row.id)" />
+                </el-tooltip>
+                <el-tooltip content="下载该版本" placement="top">
+                  <el-button size="mini" icon="el-icon-download" aria-label="下载该版本" @click="downloadVersion(scope.row.id)" />
+                </el-tooltip>
               </div>
             </template>
           </el-table-column>
@@ -320,6 +369,14 @@ export default {
     },
     auditRows() {
       return (this.audit.resultData && this.audit.resultData.data) || []
+    },
+    hasActiveFilters() {
+      return Boolean(
+        this.queryParams.systemId ||
+        this.queryParams.title ||
+        this.queryParams.reportMonth ||
+        this.queryParams.auditStatus
+      )
     }
   },
   created() {
@@ -448,15 +505,15 @@ export default {
       window.clearInterval(this.pollTimer)
       this.pollTimer = null
     },
-    suggestionText(row) {
+    auditSummaryText(row) {
       if (row.latestAuditSuggestion) return row.latestAuditSuggestion
       return {
-        pending: '等待 AI 审核开始',
-        running: 'AI 正在审核，稍后刷新查看结果',
-        passed: '未发现需要调整的问题',
-        failed: '审核未通过，请进入详情查看检查点和修改建议',
-        error: '审核执行失败，请进入详情查看错误原因'
-      }[row.latestAuditStatus] || '暂无审核建议'
+        pending: '等待后台任务处理',
+        running: '正在解析报告并生成结论',
+        passed: '未发现明显问题',
+        failed: '请查看检查点和修改建议',
+        error: '审核执行异常，请查看错误信息'
+      }[row.latestAuditStatus] || '暂无审核信息'
     },
     statusHint(status) {
       return {
@@ -520,9 +577,9 @@ export default {
 }
 
 .filter-panel {
-  padding: 16px 16px 0;
+  padding: 14px 16px 0;
   border-radius: 6px;
-  margin-bottom: 14px;
+  margin-bottom: 12px;
 }
 
 .filter-main {
@@ -530,7 +587,8 @@ export default {
 }
 
 .filter-main /deep/ .el-form-item {
-  margin-bottom: 16px;
+  margin-right: 14px;
+  margin-bottom: 14px;
 }
 
 .filter-input {
@@ -545,23 +603,86 @@ export default {
   width: 150px;
 }
 
+.result-toolbar {
+  display: flex;
+  align-items: center;
+  min-height: 42px;
+  margin: 0 -16px;
+  padding: 0 16px;
+  color: #8492a6;
+  background: #fafbfd;
+  border-top: 1px solid #edf1f6;
+  font-size: 12px;
+}
+
+.result-count strong {
+  color: #303a45;
+  font-size: 14px;
+}
+
+.filter-applied {
+  margin-left: 10px;
+  padding-left: 10px;
+  border-left: 1px solid #dfe5ec;
+}
+
+.refresh-button {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  margin-left: auto;
+}
+
 .report-table {
   border-radius: 6px;
+  overflow: hidden;
 }
 
 .report-table /deep/ .el-table__header th {
-  background: #f8fafc;
+  height: 44px;
+  background: #f7f9fc;
   color: #52616f;
   font-weight: 600;
 }
 
-.report-table /deep/ .el-table__row td {
-  padding: 10px 0;
+.report-table /deep/::before {
+  display: none;
 }
 
-.report-table /deep/ .report-row-pending td,
-.report-table /deep/ .report-row-running td {
-  background: #fffaf0;
+.report-table /deep/ td,
+.report-table /deep/ th.is-leaf {
+  border-bottom-color: #edf1f6;
+}
+
+.report-table /deep/ .el-table__row td {
+  padding: 12px 0;
+  transition: background-color .16s ease;
+}
+
+.report-table /deep/ .el-table__row:hover td {
+  background: #f8fbff;
+}
+
+.report-empty {
+  padding: 38px 0 34px;
+  color: #9aa6b2;
+  line-height: 1.5;
+}
+
+.report-empty > i {
+  margin-bottom: 8px;
+  color: #c6cfda;
+  font-size: 30px;
+}
+
+.report-empty-title {
+  color: #657384;
+  font-size: 14px;
+}
+
+.report-table /deep/ .report-row-pending td:first-child,
+.report-table /deep/ .report-row-running td:first-child {
+  box-shadow: inset 3px 0 0 #e6a23c;
 }
 
 .report-cell {
@@ -570,9 +691,10 @@ export default {
 
 .report-name {
   color: #1f2d3d;
+  font-size: 14px;
   font-weight: 600;
   cursor: pointer;
-  line-height: 20px;
+  line-height: 21px;
 }
 
 .report-name:hover {
@@ -582,8 +704,8 @@ export default {
 .report-meta {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
-  margin-top: 7px;
+  gap: 14px;
+  margin-top: 6px;
   color: #8492a6;
   font-size: 12px;
 }
@@ -596,16 +718,46 @@ export default {
   color: #a3afbf;
 }
 
-.jira-line {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 9px;
+.system-code {
+  color: #60758a;
 }
 
-.jira-label {
-  color: #8492a6;
+.month-text {
+  color: #52616f;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.jira-ticket {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #456786;
   font-size: 12px;
+}
+
+.jira-ticket i {
+  color: #8aa5bd;
+}
+
+.jira-ticket span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.version-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  height: 22px;
+  color: #3f607d;
+  background: #f1f6fa;
+  border: 1px solid #dbe7f0;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .version-type {
@@ -619,6 +771,17 @@ export default {
 }
 
 .audit-brief {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.audit-cell-content {
+  min-width: 0;
+}
+
+.audit-status-line {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -672,13 +835,18 @@ export default {
   animation-delay: .32s;
 }
 
-.audit-conclusion {
-  color: #1f2d3d;
+.audit-conclusion,
+.audit-summary-text {
+  color: #52616f;
   font-size: 12px;
-  font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.audit-summary-text {
+  margin-top: 6px;
+  color: #7b8794;
 }
 
 .suggestion-main {
@@ -691,14 +859,16 @@ export default {
 }
 
 .suggestion-link {
-  flex: none;
+  margin-top: 5px;
   padding: 0;
+  font-size: 12px;
 }
 
 .row-actions {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
 }
 
 .row-actions /deep/ .el-button + .el-button {
@@ -709,11 +879,50 @@ export default {
   gap: 6px;
 }
 
+.icon-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.icon-actions /deep/ .el-button,
+.compact-actions /deep/ .el-tooltip .el-button {
+  width: 30px;
+  height: 28px;
+  padding: 0;
+}
+
+.icon-actions /deep/ .el-button + .el-button {
+  margin-left: 0;
+}
+
 .detail-strip {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
   margin-bottom: 14px;
+}
+
+@media (max-width: 1280px) {
+  .filter-title {
+    width: 190px;
+  }
+
+  .filter-main /deep/ .el-form-item {
+    margin-right: 9px;
+  }
+}
+
+@media (max-width: 900px) {
+  .filter-input,
+  .filter-title,
+  .filter-status {
+    width: 180px;
+  }
+
+  .detail-strip,
+  .audit-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .detail-strip > div,
