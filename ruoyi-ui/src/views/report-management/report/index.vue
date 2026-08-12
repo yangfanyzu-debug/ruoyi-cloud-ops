@@ -2,7 +2,7 @@
   <div class="app-container report-page">
     <div class="filter-panel">
       <div class="filter-main">
-        <el-form ref="queryForm" :model="queryParams" size="small" :inline="true" label-width="68px">
+        <el-form ref="queryForm" :model="queryParams" size="small" :inline="true" label-width="64px" class="query-form">
           <el-form-item label="系统编码" prop="systemId">
             <el-input
               v-model="queryParams.systemId"
@@ -44,25 +44,12 @@
               <el-option label="审核失败" value="error" />
             </el-select>
           </el-form-item>
-          <el-form-item>
+          <el-form-item class="query-actions">
             <el-button type="primary" icon="el-icon-search" size="mini" @click="handleQuery">查询</el-button>
             <el-button icon="el-icon-refresh-left" size="mini" @click="resetQuery">重置</el-button>
+            <el-button icon="el-icon-refresh" size="mini" :loading="loading" @click="getList">刷新</el-button>
           </el-form-item>
         </el-form>
-      </div>
-      <div class="result-toolbar">
-        <span class="result-count">共 <strong>{{ total }}</strong> 份报告</span>
-        <span v-if="hasActiveFilters" class="filter-applied">已按条件筛选</span>
-        <el-tooltip content="刷新列表" placement="top">
-          <el-button
-            class="refresh-button"
-            icon="el-icon-refresh"
-            size="mini"
-            :loading="loading"
-            aria-label="刷新列表"
-            @click="getList"
-          />
-        </el-tooltip>
       </div>
     </div>
 
@@ -133,21 +120,13 @@
           </div>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="196" align="right">
+      <el-table-column label="操作" width="286" align="right">
         <template slot-scope="scope">
           <div class="row-actions">
             <el-button size="mini" type="primary" plain @click="openDetail(scope.row)">详情</el-button>
-            <div class="icon-actions">
-              <el-tooltip content="预览最新版本" placement="top">
-                <el-button size="mini" icon="el-icon-document" :disabled="!scope.row.latestVersionId" aria-label="预览最新版本" @click="openPreview(scope.row.latestVersionId)" />
-              </el-tooltip>
-              <el-tooltip content="下载最新版本" placement="top">
-                <el-button size="mini" icon="el-icon-download" :disabled="!scope.row.latestVersionId" aria-label="下载最新版本" @click="downloadVersion(scope.row.latestVersionId)" />
-              </el-tooltip>
-              <el-tooltip content="上传修订版本" placement="top">
-                <el-button size="mini" icon="el-icon-upload2" aria-label="上传修订版本" @click="openUpload(scope.row)" />
-              </el-tooltip>
-            </div>
+            <el-button size="mini" :disabled="!scope.row.latestVersionId" @click="openPreview(scope.row.latestVersionId)">预览</el-button>
+            <el-button size="mini" :disabled="!scope.row.latestVersionId" @click="downloadVersion(scope.row.latestVersionId)">下载</el-button>
+            <el-button size="mini" @click="openUpload(scope.row)">上传</el-button>
           </div>
         </template>
       </el-table-column>
@@ -263,7 +242,7 @@
               </div>
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="260">
+          <el-table-column label="操作" width="270">
             <template slot-scope="scope">
               <div class="row-actions compact-actions">
                 <el-button
@@ -274,12 +253,8 @@
                   :disabled="!scope.row.latestAuditId"
                   @click="openAuditView(scope.row.latestAuditId, scope.row.auditStatus)"
                 >{{ isAuditProcessing(scope.row.auditStatus) ? '审核过程' : '审核结果' }}</el-button>
-                <el-tooltip content="在线预览" placement="top">
-                  <el-button size="mini" icon="el-icon-document" aria-label="在线预览" @click="openPreview(scope.row.id)" />
-                </el-tooltip>
-                <el-tooltip content="下载该版本" placement="top">
-                  <el-button size="mini" icon="el-icon-download" aria-label="下载该版本" @click="downloadVersion(scope.row.id)" />
-                </el-tooltip>
+                <el-button size="mini" @click="openPreview(scope.row.id)">预览</el-button>
+                <el-button size="mini" @click="downloadVersion(scope.row.id)">下载</el-button>
               </div>
             </template>
           </el-table-column>
@@ -585,7 +560,7 @@ export default {
 }
 
 .filter-panel {
-  padding: 14px 16px 0;
+  padding: 12px 14px 0;
   border-radius: 6px;
   margin-bottom: 12px;
 }
@@ -594,51 +569,34 @@ export default {
   min-width: 0;
 }
 
+.query-form {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+}
+
 .filter-main /deep/ .el-form-item {
-  margin-right: 14px;
-  margin-bottom: 14px;
+  flex: none;
+  margin-right: 10px;
+  margin-bottom: 12px;
 }
 
 .filter-input {
-  width: 160px;
+  width: 132px;
 }
 
 .filter-title {
-  width: 220px;
+  width: 172px;
 }
 
 .filter-status {
-  width: 150px;
+  width: 132px;
 }
 
-.result-toolbar {
-  display: flex;
-  align-items: center;
-  min-height: 42px;
-  margin: 0 -16px;
-  padding: 0 16px;
-  color: #8492a6;
-  background: #fafbfd;
-  border-top: 1px solid #edf1f6;
-  font-size: 12px;
-}
-
-.result-count strong {
-  color: #303a45;
-  font-size: 14px;
-}
-
-.filter-applied {
-  margin-left: 10px;
-  padding-left: 10px;
-  border-left: 1px solid #dfe5ec;
-}
-
-.refresh-button {
-  width: 28px;
-  height: 28px;
-  padding: 0;
+.filter-main /deep/ .query-actions {
+  margin-right: 0;
   margin-left: auto;
+  white-space: nowrap;
 }
 
 .report-table {
@@ -887,22 +845,6 @@ export default {
   gap: 6px;
 }
 
-.icon-actions {
-  display: flex;
-  gap: 4px;
-}
-
-.icon-actions /deep/ .el-button,
-.compact-actions /deep/ .el-tooltip .el-button {
-  width: 30px;
-  height: 28px;
-  padding: 0;
-}
-
-.icon-actions /deep/ .el-button + .el-button {
-  margin-left: 0;
-}
-
 .detail-strip {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -912,11 +854,11 @@ export default {
 
 @media (max-width: 1280px) {
   .filter-title {
-    width: 190px;
+    width: 150px;
   }
 
   .filter-main /deep/ .el-form-item {
-    margin-right: 9px;
+    margin-right: 6px;
   }
 }
 
