@@ -87,23 +87,25 @@
           <div class="version-type">{{ versionTypeLabel(scope.row.latestVersionType) }}</div>
         </template>
       </el-table-column>
-      <el-table-column label="AI审核" min-width="220">
+      <el-table-column label="审核状态" width="108">
+        <template slot-scope="scope">
+          <button
+            v-if="isAuditProcessing(scope.row.latestAuditStatus) && scope.row.latestAuditId"
+            type="button"
+            class="audit-processing-trigger"
+            @click.stop="openAuditView(scope.row.latestAuditId, scope.row.latestAuditStatus)"
+          >
+            <span class="audit-pulse" aria-hidden="true"><i /><i /><i /></span>
+            审核中
+          </button>
+          <el-tag v-else :type="statusType(scope.row.latestAuditStatus)" size="mini">
+            {{ statusLabel(scope.row.latestAuditStatus) }}
+          </el-tag>
+        </template>
+      </el-table-column>
+      <el-table-column label="审核总结" min-width="230">
         <template slot-scope="scope">
           <div class="audit-cell-content">
-            <div class="audit-status-line">
-              <button
-                v-if="isAuditProcessing(scope.row.latestAuditStatus) && scope.row.latestAuditId"
-                type="button"
-                class="audit-processing-trigger"
-                @click.stop="openAuditView(scope.row.latestAuditId, scope.row.latestAuditStatus)"
-              >
-                <span class="audit-pulse" aria-hidden="true"><i /><i /><i /></span>
-                AI审核中
-              </button>
-              <el-tag v-else :type="statusType(scope.row.latestAuditStatus)" size="mini">
-                {{ statusLabel(scope.row.latestAuditStatus) }}
-              </el-tag>
-            </div>
             <el-tooltip :content="auditSummaryText(scope.row)" placement="top" :disabled="!auditSummaryText(scope.row)">
               <div class="audit-summary-text">{{ auditSummaryText(scope.row) }}</div>
             </el-tooltip>
@@ -816,8 +818,8 @@ export default {
 }
 
 .audit-summary-text {
-  margin-top: 6px;
-  color: #7b8794;
+  color: #52616f;
+  line-height: 18px;
 }
 
 .suggestion-main {
