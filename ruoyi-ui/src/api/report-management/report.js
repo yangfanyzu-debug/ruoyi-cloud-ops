@@ -74,6 +74,13 @@ export function sendAgentMessage(reportId, versionId, content) {
   })
 }
 
+export function retryVersionAudit(reportId, versionId) {
+  return request({
+    url: `/report-management-api/audits/reports/${reportId}/versions/${versionId}/retry`,
+    method: 'post'
+  })
+}
+
 export function previewUrl(versionId) {
   return `${process.env.VUE_APP_BASE_API}/report-management-api/versions/${versionId}/preview`
 }

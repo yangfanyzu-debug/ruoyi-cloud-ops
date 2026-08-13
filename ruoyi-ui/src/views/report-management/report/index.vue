@@ -35,13 +35,14 @@
             />
           </el-form-item>
           <el-form-item label="状态" prop="auditStatus">
-            <el-select v-model="queryParams.auditStatus" class="filter-status" placeholder="全部状态" clearable>
+            <el-select v-model="queryParams.auditStatus" class="filter-status" placeholder="全部状态" clearable @change="handleStatusChange">
+              <el-option label="待处理" value="processing" />
               <el-option label="待审核" value="pending" />
               <el-option label="审核中" value="running" />
               <el-option label="审核通过" value="passed" />
               <el-option label="审核不通过" value="failed" />
               <el-option label="审核完成" value="completed" />
-              <el-option label="审核失败" value="error" />
+              <el-option label="执行失败" value="error" />
             </el-select>
           </el-form-item>
           <el-form-item class="query-actions">
@@ -50,6 +51,15 @@
             <el-button icon="el-icon-refresh" size="mini" :loading="loading" @click="getList">刷新</el-button>
           </el-form-item>
         </el-form>
+      </div>
+      <div class="quick-filter-row">
+        <span class="quick-filter-label">快捷筛选</span>
+        <el-radio-group v-model="quickAuditStatus" size="mini" @change="handleQuickStatusChange">
+          <el-radio-button label="">全部</el-radio-button>
+          <el-radio-button label="processing">待处理</el-radio-button>
+          <el-radio-button label="failed">审核不通过</el-radio-button>
+          <el-radio-button label="error">执行失败</el-radio-button>
+        </el-radio-group>
       </div>
     </div>
 
@@ -60,7 +70,6 @@
             <div class="report-name" @click="openDetail(scope.row)">{{ scope.row.title }}</div>
             <div class="report-meta">
               <span class="system-code"><i class="el-icon-cpu" /> {{ scope.row.systemId || '-' }}</span>
-              <span><i class="el-icon-time" /> {{ scope.row.createTime || '-' }}</span>
             </div>
           </div>
         </template>
@@ -72,19 +81,24 @@
       </el-table-column>
       <el-table-column label="JIRA任务" min-width="148">
         <template slot-scope="scope">
-          <el-tooltip v-if="scope.row.jiraId" :content="scope.row.jiraId" placement="top">
-            <div class="jira-ticket">
+          <el-tooltip v-if="scope.row.jiraId" content="在 JIRA 中打开" placement="top">
+            <a class="jira-ticket" :href="jiraUrl(scope.row.jiraId)" target="_blank" rel="noopener noreferrer">
               <i class="el-icon-tickets" />
               <span>{{ scope.row.jiraId }}</span>
-            </div>
+              <i class="el-icon-top-right jira-external" />
+            </a>
           </el-tooltip>
           <span v-else class="empty-text">未关联</span>
         </template>
       </el-table-column>
       <el-table-column label="版本" width="86" align="center">
         <template slot-scope="scope">
-          <span class="version-badge">{{ scope.row.latestVersionNo ? `v${scope.row.latestVersionNo}` : '-' }}</span>
-          <div class="version-type">{{ versionTypeLabel(scope.row.latestVersionType) }}</div>
+          <el-tooltip :content="versionTooltip(scope.row)" placement="top">
+            <div class="version-cell">
+              <span class="version-badge">{{ scope.row.latestVersionNo ? `v${scope.row.latestVersionNo}` : '-' }}</span>
+              <div class="version-type">{{ versionTypeLabel(scope.row.latestVersionType) }}</div>
+            </div>
+          </el-tooltip>
         </template>
       </el-table-column>
       <el-table-column label="审核状态" width="108">
@@ -98,14 +112,18 @@
             <span class="audit-pulse" aria-hidden="true"><i /><i /><i /></span>
             审核中
           </button>
-          <el-tag v-else :type="statusType(scope.row.latestAuditStatus)" size="mini">
+          <el-tag v-else :type="statusType(scope.row.latestAuditStatus)" size="mini" :class="`audit-tag-${scope.row.latestAuditStatus}`">
             {{ statusLabel(scope.row.latestAuditStatus) }}
           </el-tag>
         </template>
       </el-table-column>
       <el-table-column label="审核总结" min-width="230">
         <template slot-scope="scope">
-          <div class="audit-cell-content">
+          <div
+            class="audit-cell-content audit-cell-clickable"
+            :class="{ disabled: !scope.row.latestAuditId }"
+            @click="openAuditView(scope.row.latestAuditId, scope.row.latestAuditStatus)"
+          >
             <el-tooltip :content="auditSummaryText(scope.row)" placement="top" :disabled="!auditSummaryText(scope.row)">
               <div class="audit-summary-text">{{ auditSummaryText(scope.row) }}</div>
             </el-tooltip>
@@ -114,7 +132,7 @@
               type="text"
               size="mini"
               class="suggestion-link"
-              @click="openAuditView(scope.row.latestAuditId, scope.row.latestAuditStatus)"
+              @click.stop="openAuditView(scope.row.latestAuditId, scope.row.latestAuditStatus)"
             >
               {{ isAuditProcessing(scope.row.latestAuditStatus) ? '查看审核过程' : '查看审核结果' }}
               <i class="el-icon-arrow-right" />
@@ -122,13 +140,23 @@
           </div>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="286" align="right">
+      <el-table-column label="操作" width="246" align="right" fixed="right">
         <template slot-scope="scope">
           <div class="row-actions">
             <el-button size="mini" type="primary" plain @click="openDetail(scope.row)">详情</el-button>
-            <el-button size="mini" :disabled="!scope.row.latestVersionId" @click="openPreview(scope.row.latestVersionId)">预览</el-button>
-            <el-button size="mini" :disabled="!scope.row.latestVersionId" @click="downloadVersion(scope.row.latestVersionId)">下载</el-button>
-            <el-button size="mini" @click="openUpload(scope.row)">上传</el-button>
+            <el-tooltip content="预览最新版本" placement="top">
+              <el-button class="icon-action" size="mini" icon="el-icon-view" :disabled="!scope.row.latestVersionId" aria-label="预览最新版本" @click="openPreview(scope.row.latestVersionId)" />
+            </el-tooltip>
+            <el-tooltip content="下载最新版本" placement="top">
+              <el-button class="icon-action" size="mini" icon="el-icon-download" :disabled="!scope.row.latestVersionId" aria-label="下载最新版本" @click="downloadVersion(scope.row.latestVersionId)" />
+            </el-tooltip>
+            <el-button
+              size="mini"
+              icon="el-icon-upload2"
+              :type="scope.row.latestAuditStatus === 'failed' ? 'danger' : ''"
+              :plain="scope.row.latestAuditStatus === 'failed'"
+              @click="openUpload(scope.row)"
+            >上传新版本</el-button>
           </div>
         </template>
       </el-table-column>
@@ -184,7 +212,7 @@
     <el-dialog
       :title="detailReport.title || '报告详情'"
       :visible.sync="detailDialogVisible"
-      width="980px"
+      width="1120px"
       class="report-detail-dialog"
       append-to-body
     >
@@ -204,7 +232,10 @@
           </div>
           <div>
             <span class="detail-label">JIRA</span>
-            <strong>{{ detailReport.jiraId || '未关联' }}</strong>
+            <a v-if="detailReport.jiraId" class="detail-jira-link" :href="jiraUrl(detailReport.jiraId)" target="_blank" rel="noopener noreferrer">
+              {{ detailReport.jiraId }} <i class="el-icon-top-right" />
+            </a>
+            <strong v-else>未关联</strong>
           </div>
         </div>
 
@@ -212,6 +243,7 @@
           <el-table-column label="版本" width="86" align="center">
             <template slot-scope="scope">
               <el-tag size="mini" effect="plain">v{{ scope.row.versionNo }}</el-tag>
+              <div v-if="isLatestVersion(scope.row)" class="current-version-label">当前版本</div>
             </template>
           </el-table-column>
           <el-table-column label="报告文件" min-width="300">
@@ -225,7 +257,7 @@
               </div>
             </template>
           </el-table-column>
-          <el-table-column label="审核" width="210">
+          <el-table-column label="审核结果" min-width="240">
             <template slot-scope="scope">
               <div class="audit-brief">
                 <button
@@ -237,14 +269,15 @@
                   <span class="audit-pulse" aria-hidden="true"><i /><i /><i /></span>
                   AI审核中
                 </button>
-                <el-tag v-else :type="statusType(scope.row.auditStatus)" size="mini">
+                <el-tag v-else :type="statusType(scope.row.auditStatus)" size="mini" :class="`audit-tag-${scope.row.auditStatus}`">
                   {{ statusLabel(scope.row.auditStatus) }}
                 </el-tag>
                 <span class="audit-conclusion">{{ scope.row.latestAuditConclusion || statusHint(scope.row.auditStatus) }}</span>
               </div>
+              <div class="version-audit-summary">{{ versionAuditSummary(scope.row) }}</div>
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="270">
+          <el-table-column label="操作" width="330" align="right">
             <template slot-scope="scope">
               <div class="row-actions compact-actions">
                 <el-button
@@ -255,8 +288,27 @@
                   :disabled="!scope.row.latestAuditId"
                   @click="openAuditView(scope.row.latestAuditId, scope.row.auditStatus)"
                 >{{ isAuditProcessing(scope.row.auditStatus) ? '审核过程' : '审核结果' }}</el-button>
-                <el-button size="mini" @click="openPreview(scope.row.id)">预览</el-button>
-                <el-button size="mini" @click="downloadVersion(scope.row.id)">下载</el-button>
+                <el-tooltip content="预览该版本" placement="top">
+                  <el-button class="icon-action" size="mini" icon="el-icon-view" aria-label="预览该版本" @click="openPreview(scope.row.id)" />
+                </el-tooltip>
+                <el-tooltip content="下载该版本" placement="top">
+                  <el-button class="icon-action" size="mini" icon="el-icon-download" aria-label="下载该版本" @click="downloadVersion(scope.row.id)" />
+                </el-tooltip>
+                <el-button
+                  v-if="scope.row.auditStatus === 'error'"
+                  size="mini"
+                  icon="el-icon-refresh-right"
+                  :loading="retryingVersionId === scope.row.id"
+                  @click="retryAudit(scope.row)"
+                >重新审核</el-button>
+                <el-button
+                  v-if="isLatestVersion(scope.row) && scope.row.auditStatus === 'failed'"
+                  size="mini"
+                  type="danger"
+                  plain
+                  icon="el-icon-upload2"
+                  @click="openUploadFromDetail"
+                >上传新版本</el-button>
               </div>
             </template>
           </el-table-column>
@@ -306,7 +358,7 @@
 </template>
 
 <script>
-import { downloadUrl, getAudit, getReport, listReports, uploadReportVersion } from '@/api/report-management/report'
+import { downloadUrl, getAudit, getReport, listReports, retryVersionAudit, uploadReportVersion } from '@/api/report-management/report'
 import AuditProcessDialog from './components/AuditProcessDialog.vue'
 
 export default {
@@ -319,6 +371,7 @@ export default {
       total: 0,
       reportList: [],
       reportMonthValue: '',
+      quickAuditStatus: '',
       queryParams: {
         pageNum: 1,
         pageSize: 10,
@@ -331,6 +384,7 @@ export default {
       detailDialogVisible: false,
       auditDialogVisible: false,
       detailLoading: false,
+      retryingVersionId: null,
       currentReport: {},
       detailReport: {},
       audit: {},
@@ -344,6 +398,9 @@ export default {
   computed: {
     detailVersions() {
       return this.detailReport.versions || []
+    },
+    latestDetailVersionNo() {
+      return this.detailVersions.reduce((latest, version) => Math.max(latest, version.versionNo || 0), 0)
     },
     auditRows() {
       return (this.audit.resultData && this.audit.resultData.data) || []
@@ -366,7 +423,7 @@ export default {
   methods: {
     getList(silent = false) {
       if (!silent) this.loading = true
-      listReports(this.queryParams).then(response => {
+      return listReports(this.queryParams).then(response => {
         this.reportList = response.rows || []
         this.total = response.total || 0
         this.updatePolling()
@@ -383,10 +440,18 @@ export default {
       this.resetForm('queryForm')
       this.queryParams.reportMonth = ''
       this.queryParams.auditStatus = ''
+      this.quickAuditStatus = ''
       this.handleQuery()
     },
     handleMonthChange(value) {
       this.queryParams.reportMonth = value || ''
+    },
+    handleStatusChange(value) {
+      this.quickAuditStatus = ['processing', 'failed', 'error'].includes(value) ? value : ''
+    },
+    handleQuickStatusChange(value) {
+      this.queryParams.auditStatus = value
+      this.handleQuery()
     },
     openDetail(row) {
       this.detailDialogVisible = true
@@ -395,7 +460,7 @@ export default {
     },
     loadDetail(reportId, silent = false) {
       if (!silent) this.detailLoading = true
-      getReport(reportId).then(response => {
+      return getReport(reportId).then(response => {
         this.detailReport = response || {}
       }).finally(() => {
         if (!silent) this.detailLoading = false
@@ -416,6 +481,7 @@ export default {
       })
     },
     openAuditView(auditId, status) {
+      if (!auditId) return
       const report = this.reportList.find(item => item.latestAuditId === auditId)
       const reportId = report ? report.id : this.detailReport.id
       if (!reportId) return
@@ -435,12 +501,38 @@ export default {
     downloadVersion(versionId) {
       window.open(downloadUrl(versionId), '_blank')
     },
+    jiraUrl(jiraId) {
+      return `http://jira/browse/${encodeURIComponent(jiraId)}`
+    },
+    versionTooltip(row) {
+      const actor = row.latestVersionUploader || (row.latestVersionType === 'initial' ? '批次任务' : '未知用户')
+      return `${this.versionTypeLabel(row.latestVersionType)} · ${actor} · ${row.latestVersionCreateTime || '-'}`
+    },
     openUpload(row) {
       this.currentReport = row
       this.uploadForm = { uploader: '', file: null }
       this.uploadDialogVisible = true
       this.$nextTick(() => {
         if (this.$refs.upload) this.$refs.upload.clearFiles()
+      })
+    },
+    openUploadFromDetail() {
+      if (!this.detailReport.id) return
+      this.openUpload(this.detailReport)
+    },
+    retryAudit(version) {
+      this.$confirm('将为该版本重新创建AI审核任务，是否继续？', '重新审核', {
+        confirmButtonText: '重新审核',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }).then(() => {
+        this.retryingVersionId = version.id
+        return retryVersionAudit(this.detailReport.id, version.id).then(response => {
+          this.$modal.msgSuccess(response.created ? '已重新发起审核' : '该版本正在审核中')
+          return Promise.all([this.loadDetail(this.detailReport.id, true), this.getList(true)])
+        })
+      }).catch(() => {}).finally(() => {
+        this.retryingVersionId = null
       })
     },
     handleFileChange(file) {
@@ -463,6 +555,9 @@ export default {
         this.$modal.msgSuccess('已上传新版本，AI审核中')
         this.uploadDialogVisible = false
         this.getList()
+        if (this.detailDialogVisible && this.detailReport.id === this.currentReport.id) {
+          this.loadDetail(this.detailReport.id, true)
+        }
       }).finally(() => {
         this.uploading = false
       })
@@ -496,6 +591,21 @@ export default {
         completed: '审核已完成，请查看完整结果',
         error: '审核执行异常，请查看错误信息'
       }[row.latestAuditStatus] || '暂无审核信息'
+    },
+    versionAuditSummary(version) {
+      if (version.latestAuditErrorMessage) return version.latestAuditErrorMessage
+      if (version.latestAuditSuggestion) return version.latestAuditSuggestion
+      return {
+        pending: '等待后台任务处理',
+        running: '正在解析报告并生成结论',
+        passed: '未发现明显问题',
+        failed: '请根据审核结果修改后上传新版本',
+        completed: '审核已完成',
+        error: '审核执行异常，可重新发起审核'
+      }[version.auditStatus] || '暂无审核信息'
+    },
+    isLatestVersion(version) {
+      return version.versionNo === this.latestDetailVersionNo
     },
     statusHint(status) {
       return {
@@ -532,7 +642,7 @@ export default {
         passed: '审核通过',
         failed: '审核不通过',
         completed: '审核完成',
-        error: '审核失败'
+        error: '执行失败'
       }[status] || '待审核'
     },
     statusType(status) {
@@ -542,7 +652,7 @@ export default {
         passed: 'success',
         failed: 'danger',
         completed: '',
-        error: 'danger'
+        error: 'warning'
       }[status] || 'info'
     }
   }
@@ -562,7 +672,7 @@ export default {
 }
 
 .filter-panel {
-  padding: 12px 14px 0;
+  padding: 12px 14px 10px;
   border-radius: 6px;
   margin-bottom: 12px;
 }
@@ -581,6 +691,10 @@ export default {
   flex: none;
   margin-right: 8px;
   margin-bottom: 12px;
+}
+
+.filter-main /deep/ .el-form-item:last-child {
+  margin-bottom: 8px;
 }
 
 .filter-main /deep/ .el-form-item__label {
@@ -604,6 +718,24 @@ export default {
   margin-right: 0;
   margin-left: auto;
   white-space: nowrap;
+}
+
+.quick-filter-row {
+  display: flex;
+  align-items: center;
+  min-height: 28px;
+  padding-top: 9px;
+  border-top: 1px solid #edf1f6;
+}
+
+.quick-filter-label {
+  margin-right: 12px;
+  color: #8492a6;
+  font-size: 12px;
+}
+
+.quick-filter-row /deep/ .el-radio-button__inner {
+  padding: 6px 14px;
 }
 
 .report-table {
@@ -707,10 +839,20 @@ export default {
   gap: 6px;
   color: #456786;
   font-size: 12px;
+  text-decoration: none;
+}
+
+.jira-ticket:hover {
+  color: #409eff;
 }
 
 .jira-ticket i {
   color: #8aa5bd;
+}
+
+.jira-ticket .jira-external {
+  color: #a8b4c1;
+  font-size: 11px;
 }
 
 .jira-ticket span {
@@ -731,6 +873,11 @@ export default {
   border-radius: 4px;
   font-size: 12px;
   font-weight: 600;
+}
+
+.version-cell {
+  display: inline-block;
+  cursor: help;
 }
 
 .version-type {
@@ -785,6 +932,12 @@ export default {
   outline: none;
 }
 
+.audit-tag-error {
+  color: #8a5a00;
+  background: #fff8e6;
+  border-color: #f2cf85;
+}
+
 .audit-pulse {
   display: inline-flex;
   align-items: center;
@@ -808,8 +961,7 @@ export default {
   animation-delay: .32s;
 }
 
-.audit-conclusion,
-.audit-summary-text {
+.audit-conclusion {
   color: #52616f;
   font-size: 12px;
   overflow: hidden;
@@ -818,8 +970,22 @@ export default {
 }
 
 .audit-summary-text {
+  display: -webkit-box;
+  min-height: 36px;
+  overflow: hidden;
+  font-size: 12px;
   color: #52616f;
   line-height: 18px;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.audit-cell-clickable:not(.disabled) {
+  cursor: pointer;
+}
+
+.audit-cell-clickable:not(.disabled):hover .audit-summary-text {
+  color: #409eff;
 }
 
 .suggestion-main {
@@ -848,8 +1014,15 @@ export default {
   margin-left: 0;
 }
 
+.icon-action {
+  width: 30px;
+  padding-right: 0;
+  padding-left: 0;
+}
+
 .compact-actions {
   gap: 6px;
+  flex-wrap: wrap;
 }
 
 .detail-strip {
@@ -882,6 +1055,13 @@ export default {
   }
 }
 
+.current-version-label {
+  margin-top: 5px;
+  color: #409eff;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
 .detail-strip > div,
 .audit-summary > div,
 .audit-suggestion {
@@ -909,10 +1089,26 @@ export default {
   white-space: nowrap;
 }
 
+.detail-jira-link {
+  display: block;
+  color: #409eff;
+  font-size: 13px;
+  font-weight: 600;
+  overflow: hidden;
+  text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .detail-version-table /deep/ .el-table__header th {
   background: #f8fafc;
   color: #52616f;
   font-weight: 600;
+}
+
+.report-detail-dialog /deep/ .el-dialog {
+  width: calc(100vw - 40px) !important;
+  max-width: 1120px;
 }
 
 .file-name {
@@ -934,6 +1130,17 @@ export default {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
   margin-bottom: 14px;
+}
+
+.version-audit-summary {
+  display: -webkit-box;
+  margin-top: 6px;
+  overflow: hidden;
+  color: #7b8794;
+  font-size: 12px;
+  line-height: 18px;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .audit-suggestion {
