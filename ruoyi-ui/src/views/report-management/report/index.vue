@@ -64,22 +64,26 @@
     </div>
 
     <el-table v-loading="loading" :data="reportList" class="report-table" :row-class-name="tableRowClassName">
-      <el-table-column label="报告" min-width="320">
+      <el-table-column label="系统" width="140">
+        <template slot-scope="scope">
+          <el-tooltip :content="scope.row.systemId || '-'" placement="top" :disabled="!scope.row.systemId">
+            <div class="system-cell">{{ scope.row.systemId || '-' }}</div>
+          </el-tooltip>
+        </template>
+      </el-table-column>
+      <el-table-column label="报告" min-width="220">
         <template slot-scope="scope">
           <div class="report-cell">
             <div class="report-name" @click="openDetail(scope.row)">{{ scope.row.title }}</div>
-            <div class="report-meta">
-              <span class="system-code"><i class="el-icon-cpu" /> {{ scope.row.systemId || '-' }}</span>
-            </div>
           </div>
         </template>
       </el-table-column>
-      <el-table-column label="报告月份" width="116">
+      <el-table-column label="报告月份" width="110">
         <template slot-scope="scope">
           <span class="month-text">{{ scope.row.reportMonth || '-' }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="JIRA任务" min-width="148">
+      <el-table-column label="JIRA任务" min-width="142">
         <template slot-scope="scope">
           <el-tooltip v-if="scope.row.jiraId" content="在 JIRA 中打开" placement="top">
             <a class="jira-ticket" :href="jiraUrl(scope.row.jiraId)" target="_blank" rel="noopener noreferrer">
@@ -91,7 +95,7 @@
           <span v-else class="empty-text">未关联</span>
         </template>
       </el-table-column>
-      <el-table-column label="版本" width="86" align="center">
+      <el-table-column label="版本" width="78" align="center">
         <template slot-scope="scope">
           <el-tooltip :content="versionTooltip(scope.row)" placement="top">
             <div class="version-cell">
@@ -101,7 +105,7 @@
           </el-tooltip>
         </template>
       </el-table-column>
-      <el-table-column label="审核状态" width="108">
+      <el-table-column label="审核状态" width="104">
         <template slot-scope="scope">
           <button
             v-if="isAuditProcessing(scope.row.latestAuditStatus) && scope.row.latestAuditId"
@@ -140,15 +144,19 @@
           </div>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="246" align="right" fixed="right">
+      <el-table-column label="操作" width="226" align="right" fixed="right">
         <template slot-scope="scope">
           <div class="row-actions">
             <el-button size="mini" type="primary" plain @click="openDetail(scope.row)">详情</el-button>
             <el-tooltip content="预览最新版本" placement="top">
-              <el-button class="icon-action" size="mini" icon="el-icon-view" :disabled="!scope.row.latestVersionId" aria-label="预览最新版本" @click="openPreview(scope.row.latestVersionId)" />
+              <el-button class="icon-action" size="mini" :disabled="!scope.row.latestVersionId" aria-label="预览最新版本" @click="openPreview(scope.row.latestVersionId)">
+                <i class="el-icon-view" aria-hidden="true" />
+              </el-button>
             </el-tooltip>
             <el-tooltip content="下载最新版本" placement="top">
-              <el-button class="icon-action" size="mini" icon="el-icon-download" :disabled="!scope.row.latestVersionId" aria-label="下载最新版本" @click="downloadVersion(scope.row.latestVersionId)" />
+              <el-button class="icon-action" size="mini" :disabled="!scope.row.latestVersionId" aria-label="下载最新版本" @click="downloadVersion(scope.row.latestVersionId)">
+                <i class="el-icon-download" aria-hidden="true" />
+              </el-button>
             </el-tooltip>
             <el-button
               size="mini"
@@ -246,7 +254,7 @@
               <div v-if="isLatestVersion(scope.row)" class="current-version-label">当前版本</div>
             </template>
           </el-table-column>
-          <el-table-column label="报告文件" min-width="300">
+          <el-table-column label="报告文件" min-width="340">
             <template slot-scope="scope">
               <div class="file-name">{{ scope.row.fileName }}</div>
               <div class="file-meta">
@@ -257,7 +265,7 @@
               </div>
             </template>
           </el-table-column>
-          <el-table-column label="审核结果" min-width="240">
+          <el-table-column label="审核结果" min-width="360">
             <template slot-scope="scope">
               <div class="audit-brief">
                 <button
@@ -277,7 +285,7 @@
               <div class="version-audit-summary">{{ versionAuditSummary(scope.row) }}</div>
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="330" align="right">
+          <el-table-column label="操作" width="220" align="right">
             <template slot-scope="scope">
               <div class="row-actions compact-actions">
                 <el-button
@@ -289,10 +297,14 @@
                   @click="openAuditView(scope.row.latestAuditId, scope.row.auditStatus)"
                 >{{ isAuditProcessing(scope.row.auditStatus) ? '审核过程' : '审核结果' }}</el-button>
                 <el-tooltip content="预览该版本" placement="top">
-                  <el-button class="icon-action" size="mini" icon="el-icon-view" aria-label="预览该版本" @click="openPreview(scope.row.id)" />
+                  <el-button class="icon-action" size="mini" aria-label="预览该版本" @click="openPreview(scope.row.id)">
+                    <i class="el-icon-view" aria-hidden="true" />
+                  </el-button>
                 </el-tooltip>
                 <el-tooltip content="下载该版本" placement="top">
-                  <el-button class="icon-action" size="mini" icon="el-icon-download" aria-label="下载该版本" @click="downloadVersion(scope.row.id)" />
+                  <el-button class="icon-action" size="mini" aria-label="下载该版本" @click="downloadVersion(scope.row.id)">
+                    <i class="el-icon-download" aria-hidden="true" />
+                  </el-button>
                 </el-tooltip>
                 <el-button
                   v-if="scope.row.auditStatus === 'error'"
@@ -806,25 +818,13 @@ export default {
   color: #409eff;
 }
 
-.report-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 14px;
-  margin-top: 6px;
-  color: #8492a6;
-  font-size: 12px;
-}
-
-.report-meta span {
-  white-space: nowrap;
-}
-
-.report-meta i {
-  color: #a3afbf;
-}
-
-.system-code {
+.system-cell {
+  overflow: hidden;
   color: #60758a;
+  font-size: 13px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .month-text {
@@ -1015,14 +1015,29 @@ export default {
 }
 
 .icon-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 30px;
+  height: 28px;
   padding-right: 0;
   padding-left: 0;
+}
+
+.icon-action i {
+  color: #526f8a;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.icon-action.is-disabled i {
+  color: #c0c4cc;
 }
 
 .compact-actions {
   gap: 6px;
   flex-wrap: wrap;
+  align-content: center;
 }
 
 .detail-strip {
@@ -1104,6 +1119,10 @@ export default {
   background: #f8fafc;
   color: #52616f;
   font-weight: 600;
+}
+
+.detail-version-table /deep/ .el-table__row td {
+  padding: 10px 0;
 }
 
 .report-detail-dialog /deep/ .el-dialog {
