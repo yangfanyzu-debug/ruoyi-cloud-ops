@@ -14,7 +14,7 @@ assert.match(reportTable, /class="icon-action primary-action"[\s\S]*?icon-class=
 assert.match(reportTable, /class="icon-action"[\s\S]*?icon-class="eye-open"/, 'report actions must expose preview as an icon')
 assert.match(reportTable, /class="icon-action"[\s\S]*?icon-class="download"/, 'report actions must expose download as an icon')
 assert.match(reportTable, /class="icon-action"[\s\S]*?icon-class="upload"/, 'report actions must expose upload as an icon')
-assert.match(page, /label="操作" width="190" align="right">/, 'detail operation column must stay compact')
+assert.match(page, /label="操作" width="154" align="right">/, 'detail operation column must stay compact')
 assert.match(page, /label="报告文件" min-width="340"/, 'detail file information must receive enough width')
 assert.match(page, /label="审核结果" min-width="360"/, 'detail audit result must receive enough width')
 assert.doesNotMatch(page, /el-icon-time[\s\S]*?scope\.row\.createTime/, 'report list should not show creation time as primary metadata')
@@ -28,6 +28,8 @@ assert.match(page, /current-version-label/, 'detail dialog must identify the cur
 assert.match(page, /retryAudit\(scope\.row\)/, 'system audit failures must offer retry')
 assert.match(page, /versionAuditSummary/, 'detail versions must display audit summaries or error reasons')
 assert.match(page, /icon-class="message"/, 'detail version actions must expose audit result as an icon')
+assert.match(page, /\.compact-actions\s*\{[\s\S]*?flex-wrap:\s*nowrap/, 'detail actions must stay on one line')
+assert.match(page, /\.detail-version-table \/deep\/ \.cell\s*\{[\s\S]*?padding-right:\s*10px/, 'detail cells must use balanced padding')
 assert.match(api, /export function retryVersionAudit/)
 assert.match(api, /versions\/\$\{versionId\}\/retry/)
 

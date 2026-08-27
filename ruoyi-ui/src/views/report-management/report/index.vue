@@ -287,7 +287,7 @@
               <div class="version-audit-summary">{{ versionAuditSummary(scope.row) }}</div>
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="190" align="right">
+          <el-table-column label="操作" width="154" align="right">
             <template slot-scope="scope">
               <div class="row-actions compact-actions">
                 <el-tooltip :content="isAuditProcessing(scope.row.auditStatus) ? '查看审核过程' : '查看审核结果'" placement="top">
@@ -1013,7 +1013,8 @@ export default {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 7px;
+  gap: 4px;
+  white-space: nowrap;
 }
 
 .row-actions /deep/ .el-button + .el-button {
@@ -1053,9 +1054,8 @@ export default {
 }
 
 .compact-actions {
-  gap: 6px;
-  flex-wrap: wrap;
-  align-content: center;
+  gap: 2px;
+  flex-wrap: nowrap;
 }
 
 .detail-strip {
@@ -1140,7 +1140,13 @@ export default {
 }
 
 .detail-version-table /deep/ .el-table__row td {
-  padding: 10px 0;
+  padding: 8px 0;
+  vertical-align: middle;
+}
+
+.detail-version-table /deep/ .cell {
+  padding-right: 10px;
+  padding-left: 10px;
 }
 
 .report-detail-dialog /deep/ .el-dialog {
@@ -1155,11 +1161,19 @@ export default {
 
 .file-meta {
   display: flex;
-  flex-wrap: wrap;
+  overflow: hidden;
   gap: 10px;
   margin-top: 6px;
   color: #8492a6;
   font-size: 12px;
+  line-height: 18px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.file-meta span {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .audit-summary {
@@ -1171,6 +1185,7 @@ export default {
 
 .version-audit-summary {
   display: -webkit-box;
+  max-height: 36px;
   margin-top: 6px;
   overflow: hidden;
   color: #7b8794;
