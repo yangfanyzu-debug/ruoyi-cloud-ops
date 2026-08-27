@@ -149,13 +149,13 @@
           <div class="row-actions">
             <el-button size="mini" type="primary" plain @click="openDetail(scope.row)">详情</el-button>
             <el-tooltip content="预览最新版本" placement="top">
-              <el-button class="icon-action" size="mini" :disabled="!scope.row.latestVersionId" aria-label="预览最新版本" @click="openPreview(scope.row.latestVersionId)">
-                <i class="el-icon-view" aria-hidden="true" />
+              <el-button class="text-action" size="mini" :disabled="!scope.row.latestVersionId" @click="openPreview(scope.row.latestVersionId)">
+                预览
               </el-button>
             </el-tooltip>
             <el-tooltip content="下载最新版本" placement="top">
-              <el-button class="icon-action" size="mini" :disabled="!scope.row.latestVersionId" aria-label="下载最新版本" @click="downloadVersion(scope.row.latestVersionId)">
-                <i class="el-icon-download" aria-hidden="true" />
+              <el-button class="text-action" size="mini" :disabled="!scope.row.latestVersionId" @click="downloadVersion(scope.row.latestVersionId)">
+                下载
               </el-button>
             </el-tooltip>
             <el-button
@@ -297,13 +297,13 @@
                   @click="openAuditView(scope.row.latestAuditId, scope.row.auditStatus)"
                 >{{ isAuditProcessing(scope.row.auditStatus) ? '审核过程' : '审核结果' }}</el-button>
                 <el-tooltip content="预览该版本" placement="top">
-                  <el-button class="icon-action" size="mini" aria-label="预览该版本" @click="openPreview(scope.row.id)">
-                    <i class="el-icon-view" aria-hidden="true" />
+                  <el-button class="text-action" size="mini" @click="openPreview(scope.row.id)">
+                    预览
                   </el-button>
                 </el-tooltip>
                 <el-tooltip content="下载该版本" placement="top">
-                  <el-button class="icon-action" size="mini" aria-label="下载该版本" @click="downloadVersion(scope.row.id)">
-                    <i class="el-icon-download" aria-hidden="true" />
+                  <el-button class="text-action" size="mini" @click="downloadVersion(scope.row.id)">
+                    下载
                   </el-button>
                 </el-tooltip>
                 <el-button
@@ -1014,24 +1014,16 @@ export default {
   margin-left: 0;
 }
 
-.icon-action {
+.text-action {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
+  width: 44px;
   height: 28px;
   padding-right: 0;
   padding-left: 0;
-}
-
-.icon-action i {
-  color: #526f8a;
-  font-size: 14px;
   line-height: 1;
-}
-
-.icon-action.is-disabled i {
-  color: #c0c4cc;
+  color: #526f8a;
 }
 
 .compact-actions {
