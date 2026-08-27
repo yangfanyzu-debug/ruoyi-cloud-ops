@@ -144,27 +144,29 @@
           </div>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="190" align="right" fixed="right">
+      <el-table-column label="操作" width="180" align="right" fixed="right">
         <template slot-scope="scope">
           <div class="row-actions">
-            <el-button size="mini" type="primary" plain @click="openDetail(scope.row)">详情</el-button>
+            <el-tooltip content="查看详情" placement="top">
+              <el-button class="icon-action primary-action" size="mini" aria-label="查看详情" @click="openDetail(scope.row)">
+                <svg-icon icon-class="documentation" />
+              </el-button>
+            </el-tooltip>
             <el-tooltip content="预览最新版本" placement="top">
-              <el-button class="icon-action" size="mini" circle :disabled="!scope.row.latestVersionId" aria-label="预览最新版本" @click="openPreview(scope.row.latestVersionId)">
+              <el-button class="icon-action" size="mini" :disabled="!scope.row.latestVersionId" aria-label="预览最新版本" @click="openPreview(scope.row.latestVersionId)">
                 <svg-icon icon-class="eye-open" />
               </el-button>
             </el-tooltip>
             <el-tooltip content="下载最新版本" placement="top">
-              <el-button class="icon-action" size="mini" circle :disabled="!scope.row.latestVersionId" aria-label="下载最新版本" @click="downloadVersion(scope.row.latestVersionId)">
+              <el-button class="icon-action" size="mini" :disabled="!scope.row.latestVersionId" aria-label="下载最新版本" @click="downloadVersion(scope.row.latestVersionId)">
                 <svg-icon icon-class="download" />
               </el-button>
             </el-tooltip>
-            <el-button
-              size="mini"
-              icon="el-icon-upload2"
-              :type="scope.row.latestAuditStatus === 'failed' ? 'danger' : ''"
-              :plain="scope.row.latestAuditStatus === 'failed'"
-              @click="openUpload(scope.row)"
-            >上传</el-button>
+            <el-tooltip content="上传新版本" placement="top">
+              <el-button class="icon-action" size="mini" aria-label="上传新版本" @click="openUpload(scope.row)">
+                <svg-icon icon-class="upload" />
+              </el-button>
+            </el-tooltip>
           </div>
         </template>
       </el-table-column>
@@ -285,42 +287,46 @@
               <div class="version-audit-summary">{{ versionAuditSummary(scope.row) }}</div>
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="188" align="right">
+          <el-table-column label="操作" width="190" align="right">
             <template slot-scope="scope">
               <div class="row-actions compact-actions">
-                <el-button
-                  size="mini"
-                  type="primary"
-                  plain
-                  icon="el-icon-reading"
-                  :disabled="!scope.row.latestAuditId"
-                  @click="openAuditView(scope.row.latestAuditId, scope.row.auditStatus)"
-                >{{ isAuditProcessing(scope.row.auditStatus) ? '审核过程' : '审核结果' }}</el-button>
+                <el-tooltip :content="isAuditProcessing(scope.row.auditStatus) ? '查看审核过程' : '查看审核结果'" placement="top">
+                  <el-button
+                    class="icon-action primary-action"
+                    size="mini"
+                    aria-label="查看审核结果"
+                    :disabled="!scope.row.latestAuditId"
+                    @click="openAuditView(scope.row.latestAuditId, scope.row.auditStatus)"
+                  >
+                    <svg-icon icon-class="message" />
+                  </el-button>
+                </el-tooltip>
                 <el-tooltip content="预览该版本" placement="top">
-                  <el-button class="icon-action" size="mini" circle aria-label="预览该版本" @click="openPreview(scope.row.id)">
+                  <el-button class="icon-action" size="mini" aria-label="预览该版本" @click="openPreview(scope.row.id)">
                     <svg-icon icon-class="eye-open" />
                   </el-button>
                 </el-tooltip>
                 <el-tooltip content="下载该版本" placement="top">
-                  <el-button class="icon-action" size="mini" circle aria-label="下载该版本" @click="downloadVersion(scope.row.id)">
+                  <el-button class="icon-action" size="mini" aria-label="下载该版本" @click="downloadVersion(scope.row.id)">
                     <svg-icon icon-class="download" />
                   </el-button>
                 </el-tooltip>
-                <el-button
-                  v-if="scope.row.auditStatus === 'error'"
-                  size="mini"
-                  icon="el-icon-refresh-right"
-                  :loading="retryingVersionId === scope.row.id"
-                  @click="retryAudit(scope.row)"
-                >重新审核</el-button>
-                <el-button
-                  v-if="isLatestVersion(scope.row) && scope.row.auditStatus === 'failed'"
-                  size="mini"
-                  type="danger"
-                  plain
-                  icon="el-icon-upload2"
-                  @click="openUploadFromDetail"
-                >上传</el-button>
+                <el-tooltip v-if="scope.row.auditStatus === 'error'" content="重新审核" placement="top">
+                  <el-button
+                    class="icon-action"
+                    size="mini"
+                    aria-label="重新审核"
+                    :loading="retryingVersionId === scope.row.id"
+                    @click="retryAudit(scope.row)"
+                  >
+                    <svg-icon icon-class="refresh" />
+                  </el-button>
+                </el-tooltip>
+                <el-tooltip v-if="isLatestVersion(scope.row) && scope.row.auditStatus === 'failed'" content="上传新版本" placement="top">
+                  <el-button class="icon-action" size="mini" aria-label="上传新版本" @click="openUploadFromDetail">
+                    <svg-icon icon-class="upload" />
+                  </el-button>
+                </el-tooltip>
               </div>
             </template>
           </el-table-column>
@@ -1018,17 +1024,32 @@ export default {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
+  width: 30px;
   height: 28px;
-  padding-right: 0;
-  padding-left: 0;
+  padding: 0;
   line-height: 1;
   color: #526f8a;
+  border-color: transparent;
+  background: transparent;
+  border-radius: 4px;
+}
+
+.icon-action:hover,
+.icon-action:focus {
+  color: #1677c8;
+  border-color: #d9ebfb;
+  background: #f1f8ff;
+}
+
+.icon-action.primary-action {
+  color: #1677c8;
+  border-color: #cce5fb;
+  background: #f4faff;
 }
 
 .icon-action /deep/ .svg-icon {
-  width: 14px;
-  height: 14px;
+  width: 15px;
+  height: 15px;
 }
 
 .compact-actions {
