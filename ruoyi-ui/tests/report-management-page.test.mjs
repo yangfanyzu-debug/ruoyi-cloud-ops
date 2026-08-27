@@ -10,9 +10,9 @@ for (const heading of ['系统', '报告', '报告月份', 'JIRA任务', '版本
 }
 assert.ok(reportTable.indexOf('label="系统"') < reportTable.indexOf('label="报告"'), 'system must be the first report-list column')
 assert.match(reportTable, /class="system-cell"[\s\S]*?scope\.row\.systemId/, 'system code must render in its own table cell')
-assert.match(reportTable, /class="text-action"[\s\S]*?预览/, 'preview action must render visible text')
-assert.match(reportTable, /class="text-action"[\s\S]*?下载/, 'download action must render visible text')
-assert.match(page, /label="操作" width="220" align="right">/, 'detail operation column must stay compact')
+assert.match(reportTable, /class="icon-action"[\s\S]*?icon-class="eye-open"/, 'preview action must render a stable visible icon')
+assert.match(reportTable, /class="icon-action"[\s\S]*?icon-class="download"/, 'download action must render a stable visible icon')
+assert.match(page, /label="操作" width="188" align="right">/, 'detail operation column must stay compact')
 assert.match(page, /label="报告文件" min-width="340"/, 'detail file information must receive enough width')
 assert.match(page, /label="审核结果" min-width="360"/, 'detail audit result must receive enough width')
 assert.doesNotMatch(page, /el-icon-time[\s\S]*?scope\.row\.createTime/, 'report list should not show creation time as primary metadata')

@@ -144,18 +144,18 @@
           </div>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="226" align="right" fixed="right">
+      <el-table-column label="操作" width="190" align="right" fixed="right">
         <template slot-scope="scope">
           <div class="row-actions">
             <el-button size="mini" type="primary" plain @click="openDetail(scope.row)">详情</el-button>
             <el-tooltip content="预览最新版本" placement="top">
-              <el-button class="text-action" size="mini" :disabled="!scope.row.latestVersionId" @click="openPreview(scope.row.latestVersionId)">
-                预览
+              <el-button class="icon-action" size="mini" circle :disabled="!scope.row.latestVersionId" aria-label="预览最新版本" @click="openPreview(scope.row.latestVersionId)">
+                <svg-icon icon-class="eye-open" />
               </el-button>
             </el-tooltip>
             <el-tooltip content="下载最新版本" placement="top">
-              <el-button class="text-action" size="mini" :disabled="!scope.row.latestVersionId" @click="downloadVersion(scope.row.latestVersionId)">
-                下载
+              <el-button class="icon-action" size="mini" circle :disabled="!scope.row.latestVersionId" aria-label="下载最新版本" @click="downloadVersion(scope.row.latestVersionId)">
+                <svg-icon icon-class="download" />
               </el-button>
             </el-tooltip>
             <el-button
@@ -164,7 +164,7 @@
               :type="scope.row.latestAuditStatus === 'failed' ? 'danger' : ''"
               :plain="scope.row.latestAuditStatus === 'failed'"
               @click="openUpload(scope.row)"
-            >上传新版本</el-button>
+            >上传</el-button>
           </div>
         </template>
       </el-table-column>
@@ -285,7 +285,7 @@
               <div class="version-audit-summary">{{ versionAuditSummary(scope.row) }}</div>
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="220" align="right">
+          <el-table-column label="操作" width="188" align="right">
             <template slot-scope="scope">
               <div class="row-actions compact-actions">
                 <el-button
@@ -297,13 +297,13 @@
                   @click="openAuditView(scope.row.latestAuditId, scope.row.auditStatus)"
                 >{{ isAuditProcessing(scope.row.auditStatus) ? '审核过程' : '审核结果' }}</el-button>
                 <el-tooltip content="预览该版本" placement="top">
-                  <el-button class="text-action" size="mini" @click="openPreview(scope.row.id)">
-                    预览
+                  <el-button class="icon-action" size="mini" circle aria-label="预览该版本" @click="openPreview(scope.row.id)">
+                    <svg-icon icon-class="eye-open" />
                   </el-button>
                 </el-tooltip>
                 <el-tooltip content="下载该版本" placement="top">
-                  <el-button class="text-action" size="mini" @click="downloadVersion(scope.row.id)">
-                    下载
+                  <el-button class="icon-action" size="mini" circle aria-label="下载该版本" @click="downloadVersion(scope.row.id)">
+                    <svg-icon icon-class="download" />
                   </el-button>
                 </el-tooltip>
                 <el-button
@@ -320,7 +320,7 @@
                   plain
                   icon="el-icon-upload2"
                   @click="openUploadFromDetail"
-                >上传新版本</el-button>
+                >上传</el-button>
               </div>
             </template>
           </el-table-column>
@@ -1014,16 +1014,21 @@ export default {
   margin-left: 0;
 }
 
-.text-action {
+.icon-action {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 44px;
+  width: 28px;
   height: 28px;
   padding-right: 0;
   padding-left: 0;
   line-height: 1;
   color: #526f8a;
+}
+
+.icon-action /deep/ .svg-icon {
+  width: 14px;
+  height: 14px;
 }
 
 .compact-actions {
