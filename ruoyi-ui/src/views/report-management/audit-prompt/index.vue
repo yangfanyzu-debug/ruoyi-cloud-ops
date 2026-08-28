@@ -1,242 +1,154 @@
 <template>
   <div class="app-container audit-config-page">
-    <div class="config-toolbar">
-      <div>
-        <strong>AI审核配置</strong>
-        <span>后续审核将自动组合基础规则与当前启用的业务检查点，历史审核保留当时的配置快照</span>
-      </div>
-      <el-button icon="el-icon-refresh" size="mini" @click="loadAll">刷新</el-button>
-    </div>
-
-    <div class="effective-config">
-      <div class="config-part">
-        <span class="part-icon"><i class="el-icon-connection" /></span>
-        <div><small>模型配置</small><strong>{{ form.modelName || '未配置' }}<em v-if="form.version">v{{ form.version }}</em></strong></div>
-      </div>
-      <i class="el-icon-plus config-operator" />
-      <div class="config-part">
-        <span class="part-icon checkpoint-icon"><i class="el-icon-finished" /></span>
-        <div><small>业务检查点</small><strong>{{ enabledCount }} 项启用</strong></div>
-      </div>
-      <i class="el-icon-right config-operator" />
-      <div class="config-result">
-        <i class="el-icon-circle-check" />
-        <div><small>审核执行方式</small><strong>系统自动组合并固化快照</strong></div>
-      </div>
-    </div>
-
-    <el-tabs v-model="activeTab" class="config-tabs">
-      <el-tab-pane label="模型与基础规则" name="model">
-        <el-form ref="form" :model="form" :rules="rules" class="config-form" label-width="110px" size="small">
-          <div class="section-heading">
-            <div><strong>模型连接</strong><span>配置兼容 Chat Completions 的大模型服务</span></div>
-            <el-tag v-if="form.version" size="mini" effect="plain">当前 v{{ form.version }}</el-tag>
-          </div>
-          <el-row :gutter="16">
-            <el-col :span="12">
-              <el-form-item label="配置名称" prop="name"><el-input v-model="form.name" /></el-form-item>
-            </el-col>
-            <el-col :span="12">
-              <el-form-item label="模型名称" prop="modelName"><el-input v-model="form.modelName" /></el-form-item>
-            </el-col>
-          </el-row>
-          <el-form-item label="模型URL" prop="apiUrl"><el-input v-model="form.apiUrl" /></el-form-item>
-          <el-form-item label="API Key">
-            <el-input v-model="form.apiKey" type="password" show-password autocomplete="new-password" :placeholder="apiKeyPlaceholder" />
-            <div class="form-tip">留空将沿用当前密钥，接口不会返回密钥明文。</div>
-          </el-form-item>
-
-          <div class="section-heading prompt-heading">
-            <div><strong>基础审核规则</strong><span>仅维护角色、审核范围和输出要求，无需在这里重复填写业务检查项</span></div>
-          </div>
-          <el-form-item label="基础规则" prop="promptContent">
-            <el-input
-              v-model="form.promptContent"
-              type="textarea"
-              :rows="14"
-              resize="vertical"
-              placeholder="例如：你是性能容量报告审核助手，仅审核DOCX中的文字、表格和章节结构……"
-            />
-          </el-form-item>
-          <div class="form-actions">
-            <el-button type="primary" icon="el-icon-check" :loading="saving" @click="submitForm">保存为新版本</el-button>
-          </div>
-        </el-form>
-      </el-tab-pane>
-
-      <el-tab-pane name="checkpoints">
-        <span slot="label">业务检查点 <el-badge :value="enabledCount" :max="99" class="checkpoint-badge" /></span>
-        <div class="checkpoint-panel">
-          <div class="checkpoint-toolbar">
-            <div>
-              <strong>业务检查点</strong>
-              <span>当前启用项会动态注入后续审核，并在任务开始时固化为检查点快照</span>
-            </div>
-            <el-button type="primary" size="mini" icon="el-icon-plus" @click="openCheckpointDialog()">新增检查点</el-button>
-          </div>
-          <el-table v-loading="checkpointLoading" :data="checkpoints" class="checkpoint-table">
-            <el-table-column label="顺序" width="72" align="center">
-              <template slot-scope="scope"><span class="order-mark">{{ scope.row.sortOrder }}</span></template>
-            </el-table-column>
-            <el-table-column label="检查点" min-width="190">
-              <template slot-scope="scope"><strong class="checkpoint-name">{{ scope.row.name }}</strong></template>
-            </el-table-column>
-            <el-table-column label="检查要求" min-width="460" show-overflow-tooltip prop="content" />
-            <el-table-column label="状态" width="90" align="center">
-              <template slot-scope="scope">
-                <el-switch v-model="scope.row.enabled" @change="quickToggle(scope.row)" />
-              </template>
-            </el-table-column>
-            <el-table-column label="操作" width="90" align="right">
-              <template slot-scope="scope"><el-button type="text" icon="el-icon-edit" @click="openCheckpointDialog(scope.row)">编辑</el-button></template>
-            </el-table-column>
-            <template slot="empty"><div class="checkpoint-empty">暂无审核检查点</div></template>
-          </el-table>
+    <section class="model-panel">
+      <div class="section-bar">
+        <div><strong>模型连接配置</strong><span>初始审核和修订审核共用同一模型服务</span></div>
+        <div class="section-actions">
+          <el-tag :type="modelConfig.apiKeyConfigured ? 'success' : 'info'" size="mini" effect="plain">{{ modelConfig.apiKeyConfigured ? '密钥已配置' : '密钥未配置' }}</el-tag>
+          <el-button icon="el-icon-refresh" size="mini" :loading="loading" @click="loadAll">刷新</el-button>
         </div>
-      </el-tab-pane>
-    </el-tabs>
-
-    <el-dialog :title="checkpointForm.id ? '编辑检查点' : '新增检查点'" :visible.sync="checkpointDialogVisible" width="620px" append-to-body>
-      <el-form ref="checkpointForm" :model="checkpointForm" :rules="checkpointRules" label-width="86px" size="small">
-        <el-form-item label="名称" prop="name"><el-input v-model="checkpointForm.name" maxlength="128" show-word-limit /></el-form-item>
-        <el-form-item label="检查要求" prop="content">
-          <el-input v-model="checkpointForm.content" type="textarea" :rows="6" maxlength="2000" show-word-limit />
-        </el-form-item>
-        <el-row :gutter="16">
-          <el-col :span="12"><el-form-item label="排序"><el-input-number v-model="checkpointForm.sortOrder" :min="0" :max="9999" controls-position="right" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="启用"><el-switch v-model="checkpointForm.enabled" /></el-form-item></el-col>
-        </el-row>
-      </el-form>
-      <div slot="footer">
-        <el-button @click="checkpointDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="checkpointSaving" @click="saveCheckpoint">保存</el-button>
       </div>
-    </el-dialog>
+      <el-form ref="modelForm" :model="modelConfig" :rules="modelRules" inline size="small" class="model-form">
+        <el-form-item label="模型 URL" prop="apiUrl" class="url-field"><el-input v-model="modelConfig.apiUrl" placeholder="Chat Completions API 地址" /></el-form-item>
+        <el-form-item label="模型名称" prop="modelName" class="model-field"><el-input v-model="modelConfig.modelName" placeholder="例如 ark-code-latest" /></el-form-item>
+        <el-form-item label="API Key" class="key-field">
+          <el-input v-model="modelConfig.apiKey" type="password" show-password autocomplete="new-password" :placeholder="apiKeyPlaceholder" />
+        </el-form-item>
+        <el-form-item class="save-field"><el-button type="primary" icon="el-icon-check" :loading="modelSaving" @click="saveModelConfig">保存连接</el-button></el-form-item>
+      </el-form>
+      <div class="config-hint">API Key 留空将沿用当前密钥，服务端不会返回密钥明文。</div>
+    </section>
+
+    <section class="prompt-panel">
+      <el-tabs v-model="activeTab" class="prompt-tabs">
+        <el-tab-pane name="initial">
+          <span slot="label"><i class="el-icon-document" /> 初始审核提示词</span>
+          <div class="prompt-editor">
+            <div class="prompt-heading"><div><strong>初始审核提示词</strong><span>用于批次生成的初始版本，检查文字质量、目录、标题与基础文档结构</span></div><div class="prompt-meta"><el-tag v-if="prompts.initial.version" size="mini" effect="plain">当前 v{{ prompts.initial.version }}</el-tag><span v-if="prompts.initial.updateTime">{{ prompts.initial.updateTime }}</span></div></div>
+            <el-form :model="prompts.initial" label-width="92px" size="small">
+              <el-form-item label="配置名称"><el-input v-model="prompts.initial.name" maxlength="128" /></el-form-item>
+              <el-form-item label="提示词内容"><el-input v-model="prompts.initial.promptContent" type="textarea" :rows="18" resize="vertical" placeholder="请输入初始审核角色、范围和输出要求" /></el-form-item>
+              <div class="prompt-actions"><el-button type="primary" icon="el-icon-check" :loading="promptSaving === 'initial'" @click="savePrompt('initial')">保存为新版本</el-button></div>
+            </el-form>
+          </div>
+        </el-tab-pane>
+        <el-tab-pane name="revision">
+          <span slot="label"><i class="el-icon-edit-outline" /> 修订审核提示词</span>
+          <div class="prompt-editor">
+            <div class="prompt-heading"><div><strong>修订审核提示词</strong><span>用于用户上传的修订版本，检查性能容量分析、数据一致性、风险与建议，不重复初始检查</span></div><div class="prompt-meta"><el-tag v-if="prompts.revision.version" size="mini" effect="plain">当前 v{{ prompts.revision.version }}</el-tag><span v-if="prompts.revision.updateTime">{{ prompts.revision.updateTime }}</span></div></div>
+            <el-form :model="prompts.revision" label-width="92px" size="small">
+              <el-form-item label="配置名称"><el-input v-model="prompts.revision.name" maxlength="128" /></el-form-item>
+              <el-form-item label="提示词内容"><el-input v-model="prompts.revision.promptContent" type="textarea" :rows="18" resize="vertical" placeholder="请输入修订审核角色、范围和输出要求" /></el-form-item>
+              <div class="prompt-actions"><el-button type="primary" icon="el-icon-check" :loading="promptSaving === 'revision'" @click="savePrompt('revision')">保存为新版本</el-button></div>
+            </el-form>
+          </div>
+        </el-tab-pane>
+      </el-tabs>
+    </section>
   </div>
 </template>
 
 <script>
-import {
-  createAuditCheckpoint, createPromptVersion, getActivePrompt,
-  listAuditCheckpoints, updateAuditCheckpoint
-} from '@/api/report-management/auditPrompt'
+import { createPromptVersion, getActivePrompt, getAiConfig, updateAiConfig } from '@/api/report-management/auditPrompt'
 
-const emptyCheckpoint = () => ({ id: null, name: '', content: '', sortOrder: 10, enabled: true })
+const emptyPrompt = type => ({
+  auditType: type,
+  name: type === 'initial' ? '初始审核提示词' : '修订审核提示词',
+  promptContent: '', version: null, updateTime: ''
+})
 
 export default {
   name: 'ReportAuditPrompt',
   data() {
     return {
-      activeTab: 'model', saving: false, checkpointLoading: false, checkpointSaving: false,
-      checkpointDialogVisible: false, checkpoints: [], checkpointForm: emptyCheckpoint(),
-      form: {
-        name: '默认审核配置', apiUrl: 'https://ark.cn-beijing.volces.com/api/coding/v3', apiKey: '',
-        apiKeyMasked: '', apiKeyConfigured: false, promptContent: '', version: '', modelName: 'ark-code-latest'
-      },
-      rules: {
-        name: [{ required: true, message: '配置名称不能为空', trigger: 'blur' }],
-        apiUrl: [{ required: true, message: '模型URL不能为空', trigger: 'blur' }],
-        modelName: [{ required: true, message: '模型名称不能为空', trigger: 'blur' }],
-        promptContent: [{ required: true, message: '提示词不能为空', trigger: 'blur' }]
-      },
-      checkpointRules: {
-        name: [{ required: true, message: '检查点名称不能为空', trigger: 'blur' }],
-        content: [{ required: true, message: '检查要求不能为空', trigger: 'blur' }]
+      loading: false, modelSaving: false, promptSaving: '', activeTab: 'initial',
+      modelConfig: { apiUrl: '', modelName: '', apiKey: '', apiKeyMasked: '', apiKeyConfigured: false },
+      prompts: { initial: emptyPrompt('initial'), revision: emptyPrompt('revision') },
+      modelRules: {
+        apiUrl: [{ required: true, message: '模型 URL 不能为空', trigger: 'blur' }],
+        modelName: [{ required: true, message: '模型名称不能为空', trigger: 'blur' }]
       }
     }
   },
   computed: {
     apiKeyPlaceholder() {
-      return this.form.apiKeyConfigured && this.form.apiKeyMasked ? `已配置：${this.form.apiKeyMasked}，留空沿用` : '请输入 API Key'
-    },
-    enabledCount() {
-      return this.checkpoints.filter(item => item.enabled).length
+      return this.modelConfig.apiKeyConfigured && this.modelConfig.apiKeyMasked
+        ? `已配置：${this.modelConfig.apiKeyMasked}` : '请输入 API Key'
     }
   },
   created() { this.loadAll() },
   methods: {
-    loadAll() { this.loadActivePrompt(); this.loadCheckpoints() },
-    loadActivePrompt() {
-      getActivePrompt().then(response => {
-        this.form = {
-          name: response.name, apiUrl: response.apiUrl, apiKey: '', apiKeyMasked: response.apiKeyMasked || '',
-          apiKeyConfigured: Boolean(response.apiKeyConfigured), promptContent: response.promptContent,
-          version: response.version, modelName: response.modelName
+    loadAll() {
+      this.loading = true
+      return Promise.all([this.loadModelConfig(), this.loadPrompt('initial'), this.loadPrompt('revision')])
+        .finally(() => { this.loading = false })
+    },
+    loadModelConfig() {
+      return getAiConfig().then(response => {
+        this.modelConfig = {
+          apiUrl: response.apiUrl || '', modelName: response.modelName || '', apiKey: '',
+          apiKeyMasked: response.apiKeyMasked || '', apiKeyConfigured: Boolean(response.apiKeyConfigured)
         }
+      }).catch(error => { if (!(error && error.response && error.response.status === 404)) throw error })
+    },
+    loadPrompt(auditType) {
+      return getActivePrompt(auditType).then(response => {
+        this.$set(this.prompts, auditType, {
+          auditType, name: response.name || this.prompts[auditType].name,
+          promptContent: response.promptContent || '', version: response.version || null,
+          updateTime: response.updateTime || ''
+        })
+      }).catch(error => { if (!(error && error.response && error.response.status === 404)) throw error })
+    },
+    saveModelConfig() {
+      this.$refs.modelForm.validate(valid => {
+        if (!valid) return
+        this.modelSaving = true
+        updateAiConfig({ apiUrl: this.modelConfig.apiUrl, modelName: this.modelConfig.modelName, apiKey: this.modelConfig.apiKey })
+          .then(response => {
+            this.modelConfig.apiKey = ''
+            this.modelConfig.apiKeyMasked = response.apiKeyMasked || ''
+            this.modelConfig.apiKeyConfigured = Boolean(response.apiKeyConfigured)
+            this.$modal.msgSuccess('模型连接已保存')
+          }).finally(() => { this.modelSaving = false })
       })
     },
-    loadCheckpoints() {
-      this.checkpointLoading = true
-      listAuditCheckpoints().then(response => { this.checkpoints = response.rows || [] }).finally(() => { this.checkpointLoading = false })
-    },
-    submitForm() {
-      this.$refs.form.validate(valid => {
-        if (!valid) return
-        this.saving = true
-        createPromptVersion({
-          name: this.form.name, apiUrl: this.form.apiUrl, apiKey: this.form.apiKey,
-          promptContent: this.form.promptContent, modelName: this.form.modelName
-        }).then(response => {
+    savePrompt(auditType) {
+      const form = this.prompts[auditType]
+      if (!form.name.trim() || !form.promptContent.trim()) {
+        this.$modal.msgError('配置名称和提示词内容不能为空')
+        return
+      }
+      this.promptSaving = auditType
+      createPromptVersion(auditType, { name: form.name.trim(), promptContent: form.promptContent.trim() })
+        .then(response => {
+          this.$set(this.prompts, auditType, { ...form, version: response.version, updateTime: response.updateTime || '' })
           this.$modal.msgSuccess(`已保存为 v${response.version}`)
-          this.form.version = response.version; this.form.apiKey = ''
-          this.form.apiKeyMasked = response.apiKeyMasked || ''; this.form.apiKeyConfigured = Boolean(response.apiKeyConfigured)
-        }).finally(() => { this.saving = false })
-      })
-    },
-    openCheckpointDialog(row) {
-      this.checkpointForm = row ? { ...row } : { ...emptyCheckpoint(), sortOrder: (this.checkpoints.length + 1) * 10 }
-      this.checkpointDialogVisible = true
-      this.$nextTick(() => this.$refs.checkpointForm && this.$refs.checkpointForm.clearValidate())
-    },
-    saveCheckpoint() {
-      this.$refs.checkpointForm.validate(valid => {
-        if (!valid) return
-        this.checkpointSaving = true
-        const request = this.checkpointForm.id
-          ? updateAuditCheckpoint(this.checkpointForm.id, this.checkpointForm)
-          : createAuditCheckpoint(this.checkpointForm)
-        request.then(() => {
-          this.$modal.msgSuccess('检查点已保存')
-          this.checkpointDialogVisible = false
-          this.loadCheckpoints()
-        }).finally(() => { this.checkpointSaving = false })
-      })
-    },
-    quickToggle(row) {
-      updateAuditCheckpoint(row.id, row).then(() => this.$modal.msgSuccess(row.enabled ? '检查点已启用' : '检查点已停用'))
-        .catch(() => { row.enabled = !row.enabled })
+        }).finally(() => { this.promptSaving = '' })
     }
   }
 }
 </script>
 
 <style scoped>
-.audit-config-page { min-height:calc(100vh - 84px); background:#f6f8fb; }
-.config-toolbar { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
-.config-toolbar strong,.config-toolbar span,.section-heading strong,.section-heading span,.checkpoint-toolbar strong,.checkpoint-toolbar span { display:block; }
-.config-toolbar strong { color:#1f2d3d; font-size:16px; }.config-toolbar span { margin-top:4px; color:#7f8c99; font-size:12px; }
-.effective-config { display:flex; align-items:center; min-height:72px; padding:0 20px; margin-bottom:12px; box-sizing:border-box; background:#fff; border:1px solid #e4e9f0; border-left:3px solid #409eff; border-radius:5px; }
-.config-part,.config-result { display:flex; align-items:center; min-width:0; gap:10px; }
-.config-part { flex:0 1 250px; }.config-result { flex:1; }
-.part-icon { display:grid; flex:none; width:32px; height:32px; place-items:center; color:#2879bc; background:#eaf4fc; border-radius:4px; }
-.checkpoint-icon { color:#527552; background:#edf6ed; }
-.config-part small,.config-part strong,.config-result small,.config-result strong { display:block; }
-.config-part small,.config-result small { margin-bottom:3px; color:#8794a1; font-size:11px; }
-.config-part strong,.config-result strong { overflow:hidden; color:#344454; font-size:13px; text-overflow:ellipsis; white-space:nowrap; }
-.config-part em { margin-left:7px; color:#7d8b98; font-size:11px; font-style:normal; font-weight:400; }
-.config-operator { flex:none; margin:0 26px; color:#a4afba; font-size:14px; }
-.config-result > i { color:#67c23a; font-size:24px; }
-.config-tabs { padding:0 20px 20px; background:#fff; border:1px solid #e4e9f0; border-radius:6px; }
-.config-tabs /deep/ .el-tabs__header { margin-bottom:18px; }.checkpoint-badge { margin-left:5px; }
-.checkpoint-badge /deep/ .el-badge__content { top:3px; }
-.config-form { max-width:1040px; }
-.section-heading,.checkpoint-toolbar { display:flex; align-items:center; justify-content:space-between; margin-bottom:18px; }
-.section-heading strong,.checkpoint-toolbar strong { color:#273746; font-size:14px; }.section-heading span,.checkpoint-toolbar span { margin-top:4px; color:#8492a6; font-size:12px; }
-.prompt-heading { padding-top:18px; margin-top:6px; border-top:1px solid #edf1f6; }
-.form-tip { margin-top:5px; color:#8492a6; font-size:12px; }.form-actions { padding-left:110px; }
-.checkpoint-panel { min-height:420px; }.checkpoint-table { border:1px solid #e8edf3; border-radius:5px; }
-.checkpoint-table /deep/ th { background:#f7f9fc; color:#52616f; }.checkpoint-table /deep/::before { display:none; }
-.order-mark { display:inline-grid; min-width:28px; height:22px; place-items:center; color:#60758a; background:#edf3f7; border-radius:3px; font-size:12px; }
-.checkpoint-name { color:#303a45; font-size:13px; }.checkpoint-empty { padding:40px 0; color:#9aa6b2; }
-@media (max-width:1100px) { .config-operator { margin:0 14px; }.config-part { flex-basis:210px; } }
+.audit-config-page { min-height:calc(100vh - 84px); background:#f5f7fa; color:#273746; }
+.model-panel,.prompt-panel { background:#fff; border:1px solid #dfe5ec; border-radius:6px; }
+.model-panel { padding:18px 20px 12px; margin-bottom:12px; }
+.section-bar,.prompt-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:20px; }
+.section-bar { margin-bottom:17px; }
+.section-bar strong,.section-bar span,.prompt-heading strong,.prompt-heading span { display:block; }
+.section-bar strong { font-size:15px; }.section-bar span,.prompt-heading span { margin-top:4px; color:#7c8996; font-size:12px; }
+.section-actions { display:flex; align-items:center; gap:8px; }
+.model-form { display:flex; align-items:flex-start; gap:12px; }
+.model-form /deep/ .el-form-item { display:flex; margin-right:0; }
+.model-form /deep/ .el-form-item__content { flex:1; }
+.url-field { flex:1.6; }.model-field { flex:.85; }.key-field { flex:1; }.save-field { flex:none; }
+.config-hint { margin:-4px 0 0 76px; color:#8b97a3; font-size:12px; }
+.prompt-panel { padding:0 20px 20px; }
+.prompt-tabs /deep/ .el-tabs__header { margin-bottom:0; }.prompt-tabs /deep/ .el-tabs__item { height:48px; line-height:48px; }
+.prompt-editor { max-width:1080px; padding-top:18px; }
+.prompt-heading { padding-bottom:14px; margin-bottom:16px; border-bottom:1px solid #edf1f5; }
+.prompt-heading strong { font-size:14px; }.prompt-meta { display:flex; align-items:center; gap:10px; color:#8a96a3; font-size:12px; }
+.prompt-meta span { margin-top:0; }.prompt-actions { padding-left:92px; }
+@media (max-width:1180px) { .model-form { flex-wrap:wrap; }.url-field { flex:1 1 55%; }.model-field,.key-field { flex:1 1 32%; }.save-field { margin-left:auto; } }
 </style>

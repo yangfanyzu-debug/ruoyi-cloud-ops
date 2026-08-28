@@ -48,9 +48,10 @@
             <strong>审核记录与报告 Agent</strong>
             <span>{{ currentVersion ? `当前查看 v${currentVersion.versionNo}` : '请选择报告版本' }}</span>
           </div>
-          <el-tag :type="statusType(currentVersion && currentVersion.auditStatus)" size="mini">
-            {{ statusLabel(currentVersion && currentVersion.auditStatus) }}
-          </el-tag>
+          <div class="conversation-tags">
+            <el-tag v-if="currentVersion && currentVersion.auditTypeLabel" class="audit-type-tag" type="info" effect="plain" size="mini">{{ currentVersion.auditTypeLabel }}</el-tag>
+            <el-tag :type="statusType(currentVersion && currentVersion.auditStatus)" size="mini">{{ statusLabel(currentVersion && currentVersion.auditStatus) }}</el-tag>
+          </div>
         </div>
 
         <div ref="messages" v-loading="loading && !versions.length" class="conversation-scroll">
@@ -96,9 +97,6 @@
                   :closable="false"
                   show-icon
                 />
-                <div v-if="version.checkpointSnapshot && version.checkpointSnapshot.length" class="checkpoint-note">
-                  本次使用 {{ version.checkpointSnapshot.length }} 个审核检查点
-                </div>
               </div>
             </div>
           </div>
@@ -355,6 +353,7 @@ export default {
 .conversation-head strong,.conversation-head span { display:block; }
 .conversation-head strong { font-size:14px; }
 .conversation-head div > span { margin-top:4px; color:var(--muted); font-size:12px; }
+.conversation-tags { display:flex; align-items:center; gap:6px; }
 .conversation-scroll { flex:1 1 auto; min-height:0; overflow-y:auto; padding:14px 15px 26px; box-sizing:border-box; scroll-behavior:smooth; }
 .conversation-empty { display:flex; align-items:center; justify-content:center; flex-direction:column; height:100%; gap:8px; color:#9aa6b2; }
 .conversation-empty i { font-size:30px; }
@@ -376,7 +375,6 @@ export default {
 .typing-line { display:inline-flex; gap:3px; }
 .typing-line i { width:5px; height:5px; background:#409eff; border-radius:50%; animation:typing 1.1s ease-in-out infinite; }
 .typing-line i:nth-child(2) { animation-delay:.14s; }.typing-line i:nth-child(3) { animation-delay:.28s; }
-.checkpoint-note { margin-top:10px; padding-top:8px; color:#7e8c99; border-top:1px solid #d7e5f0; font-size:11px; }
 .agent-thread { padding-top:6px; margin-top:12px; border-top:1px solid #dfe5ec; }
 .agent-thread-title { display:flex; align-items:baseline; justify-content:space-between; gap:10px; padding:14px 3px 12px; }
 .agent-thread-title span { color:#344454; font-size:13px; font-weight:600; }

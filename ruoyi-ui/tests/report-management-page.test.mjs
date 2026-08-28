@@ -27,6 +27,7 @@ assert.match(page, /上传新版本/, 'failed reports must offer a clearly named
 assert.match(page, /current-version-label/, 'detail dialog must identify the current version')
 assert.match(page, /retryAudit\(scope\.row\)/, 'system audit failures must offer retry')
 assert.match(page, /versionAuditSummary/, 'detail versions must display audit summaries or error reasons')
+assert.match(page, /scope\.row\.auditTypeLabel/, 'detail versions must identify initial and revision audits')
 assert.match(page, /icon-class="message"/, 'detail version actions must expose audit result as an icon')
 assert.match(page, /\.compact-actions\s*\{[\s\S]*?flex-wrap:\s*nowrap/, 'detail actions must stay on one line')
 assert.match(page, /\.detail-version-table \/deep\/ \.cell\s*\{[\s\S]*?padding-right:\s*10px/, 'detail cells must use balanced padding')

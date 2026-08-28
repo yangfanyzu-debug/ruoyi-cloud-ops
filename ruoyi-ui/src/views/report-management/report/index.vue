@@ -282,6 +282,7 @@
                 <el-tag v-else :type="statusType(scope.row.auditStatus)" size="mini" :class="`audit-tag-${scope.row.auditStatus}`">
                   {{ statusLabel(scope.row.auditStatus) }}
                 </el-tag>
+                <el-tag v-if="scope.row.auditTypeLabel" class="audit-type-tag" size="mini" type="info" effect="plain">{{ scope.row.auditTypeLabel }}</el-tag>
                 <span class="audit-conclusion">{{ scope.row.latestAuditConclusion || statusHint(scope.row.auditStatus) }}</span>
               </div>
               <div class="version-audit-summary">{{ versionAuditSummary(scope.row) }}</div>
@@ -902,6 +903,7 @@ export default {
   gap: 8px;
   min-width: 0;
 }
+.audit-type-tag { flex:none; }
 
 .audit-cell-content {
   min-width: 0;
