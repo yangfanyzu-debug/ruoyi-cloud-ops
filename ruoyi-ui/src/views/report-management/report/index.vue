@@ -112,7 +112,7 @@
       <el-table-column label="审核状态" width="104">
         <template slot-scope="scope">
           <button
-            v-if="isAuditProcessing(scope.row.latestAuditStatus) && scope.row.latestAuditId"
+            v-if="isAuditRunning(scope.row.latestAuditStatus) && scope.row.latestAuditId"
             type="button"
             class="audit-processing-trigger"
             @click.stop="openAuditView(scope.row.latestAuditId, scope.row.latestAuditStatus)"
@@ -142,7 +142,7 @@
               class="suggestion-link"
               @click.stop="openAuditView(scope.row.latestAuditId, scope.row.latestAuditStatus)"
             >
-              {{ isAuditProcessing(scope.row.latestAuditStatus) ? '查看审核过程' : '查看审核结果' }}
+              {{ auditActionLabel(scope.row.latestAuditStatus) }}
               <i class="el-icon-arrow-right" />
             </el-button>
           </div>
@@ -295,7 +295,7 @@
             <template slot-scope="scope">
               <div class="audit-brief">
                 <button
-                  v-if="isAuditProcessing(scope.row.auditStatus) && scope.row.latestAuditId"
+                  v-if="isAuditRunning(scope.row.auditStatus) && scope.row.latestAuditId"
                   type="button"
                   class="audit-processing-trigger"
                   @click.stop="openAuditView(scope.row.latestAuditId, scope.row.auditStatus)"
@@ -315,7 +315,7 @@
           <el-table-column label="操作" width="154" align="right">
             <template slot-scope="scope">
               <div class="row-actions compact-actions">
-                <el-tooltip :content="isAuditProcessing(scope.row.auditStatus) ? '查看审核过程' : '查看审核结果'" placement="top">
+                <el-tooltip :content="auditActionLabel(scope.row.auditStatus)" placement="top">
                   <el-button
                     class="icon-action primary-action"
                     size="mini"
@@ -587,7 +587,7 @@ export default {
       }).then(() => {
         this.retryingVersionId = version.id
         return retryVersionAudit(this.detailReport.id, version.id).then(response => {
-          this.$modal.msgSuccess(response.created ? '已重新发起审核' : '该版本正在审核中')
+          this.$modal.msgSuccess(response.created ? '已进入AI审核队列' : '该版本已在审核队列中')
           return Promise.all([this.loadDetail(this.detailReport.id, true), this.getList(true)])
         })
       }).catch(() => {}).finally(() => {
@@ -615,7 +615,7 @@ export default {
       formData.append('uploader', this.uploadForm.uploader || '未知用户')
       this.uploading = true
       uploadReportVersion(this.currentReport.id, formData).then(() => {
-        this.$modal.msgSuccess('已上传新版本，AI审核中')
+        this.$modal.msgSuccess('已上传新版本，等待AI审核')
         this.uploadDialogVisible = false
         this.getList()
         if (this.detailDialogVisible && this.detailReport.id === this.currentReport.id) {
@@ -675,7 +675,7 @@ export default {
     auditSummaryText(row) {
       if (row.latestAuditSuggestion) return row.latestAuditSuggestion
       return {
-        pending: '等待后台任务处理',
+        pending: '已进入队列，等待后台Worker处理',
         running: '正在解析报告并生成结论',
         passed: '未发现明显问题',
         failed: '请查看检查点和修改建议',
@@ -687,7 +687,7 @@ export default {
       if (version.latestAuditErrorMessage) return version.latestAuditErrorMessage
       if (version.latestAuditSuggestion) return version.latestAuditSuggestion
       return {
-        pending: '等待后台任务处理',
+        pending: '已进入队列，等待后台Worker处理',
         running: '正在解析报告并生成结论',
         passed: '未发现明显问题',
         failed: '请根据审核结果修改后上传新版本',
@@ -700,7 +700,7 @@ export default {
     },
     statusHint(status) {
       return {
-        pending: '等待处理',
+        pending: '排队等待',
         running: '正在处理',
         passed: '通过',
         failed: '不通过',
@@ -710,6 +710,14 @@ export default {
     },
     isAuditProcessing(status) {
       return ['pending', 'running'].includes(status)
+    },
+    isAuditRunning(status) {
+      return status === 'running'
+    },
+    auditActionLabel(status) {
+      if (status === 'pending') return '查看排队状态'
+      if (status === 'running') return '查看审核过程'
+      return '查看审核结果'
     },
     versionTypeLabel(type) {
       return {
@@ -728,7 +736,7 @@ export default {
     },
     statusLabel(status) {
       return {
-        pending: '待审核',
+        pending: '排队中',
         running: '审核中',
         passed: '审核通过',
         failed: '审核不通过',
