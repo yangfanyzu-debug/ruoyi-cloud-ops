@@ -5,7 +5,7 @@ const page = fs.readFileSync('src/views/report-management/report/index.vue', 'ut
 const api = fs.readFileSync('src/api/report-management/report.js', 'utf8')
 const reportTable = page.slice(page.indexOf('<el-table v-loading'), page.indexOf('<pagination'))
 
-for (const heading of ['系统', '报告', '报告月份', 'JIRA任务', '版本', '审核状态', '审核总结', '操作']) {
+for (const heading of ['系统', '报告', '报告月份', 'JIRA任务', '版本', '审核状态', '审核总结', '定稿', '操作']) {
   assert.match(reportTable, new RegExp(`label="${heading}"`), `report list must keep ${heading} as a dedicated column`)
 }
 assert.ok(reportTable.indexOf('label="系统"') < reportTable.indexOf('label="报告"'), 'system must be the first report-list column')
@@ -24,6 +24,9 @@ assert.match(page, /http:\/\/jira\/browse\//, 'JIRA task must link to the config
 assert.match(page, /-webkit-line-clamp:\s*2/, 'audit summaries must use a stable two-line layout')
 assert.match(page, /audit-cell-clickable/, 'audit summary area must open the audit workbench')
 assert.match(page, /上传新版本/, 'failed reports must offer a clearly named revision action')
+assert.match(reportTable, />确认定稿<\/el-button>/, 'report rows must expose the explicit finalization action')
+assert.match(reportTable, /scope\.row\.isFinalized/, 'finalized rows must expose immutable state')
+assert.match(page, /报告已定稿，不能继续上传修订版本/, 'upload entry must guard finalized reports')
 assert.match(page, /current-version-label/, 'detail dialog must identify the current version')
 assert.match(page, /retryAudit\(scope\.row\)/, 'system audit failures must offer retry')
 assert.match(page, /versionAuditSummary/, 'detail versions must display audit summaries or error reasons')
@@ -33,5 +36,7 @@ assert.match(page, /\.compact-actions\s*\{[\s\S]*?flex-wrap:\s*nowrap/, 'detail 
 assert.match(page, /\.detail-version-table \/deep\/ \.cell\s*\{[\s\S]*?padding-right:\s*10px/, 'detail cells must use balanced padding')
 assert.match(api, /export function retryVersionAudit/)
 assert.match(api, /versions\/\$\{versionId\}\/retry/)
+assert.match(api, /export function finalizeReport/)
+assert.match(api, /reports\/\$\{reportId\}\/finalize/)
 
 console.log('report-management-page test passed')

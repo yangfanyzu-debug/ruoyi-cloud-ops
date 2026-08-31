@@ -92,7 +92,11 @@
               <i class="el-icon-top-right jira-external" />
             </a>
           </el-tooltip>
-          <span v-else class="empty-text">未关联</span>
+          <el-tooltip v-else-if="scope.row.jiraStatus === 'error'" :content="scope.row.jiraError || 'JIRA创建失败'" placement="top">
+            <span class="jira-state jira-state-error">创建失败</span>
+          </el-tooltip>
+          <span v-else-if="['pending', 'creating'].includes(scope.row.jiraStatus)" class="jira-state">创建中</span>
+          <span v-else class="empty-text">待初审通过</span>
         </template>
       </el-table-column>
       <el-table-column label="版本" width="78" align="center">
@@ -144,7 +148,23 @@
           </div>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="180" align="right" fixed="right">
+      <el-table-column label="定稿" width="96" align="center">
+        <template slot-scope="scope">
+          <el-tag v-if="scope.row.isFinalized" type="success" size="mini">已定稿</el-tag>
+          <el-tooltip v-else :content="finalizeHint(scope.row)" placement="top">
+            <span>
+              <el-button
+                class="finalize-button"
+                size="mini"
+                :disabled="!canFinalize(scope.row)"
+                :loading="finalizingReportId === scope.row.id"
+                @click="confirmFinalize(scope.row)"
+              >确认定稿</el-button>
+            </span>
+          </el-tooltip>
+        </template>
+      </el-table-column>
+      <el-table-column label="操作" width="160" align="right" fixed="right">
         <template slot-scope="scope">
           <div class="row-actions">
             <el-tooltip content="查看详情" placement="top">
@@ -163,7 +183,7 @@
               </el-button>
             </el-tooltip>
             <el-tooltip content="上传新版本" placement="top">
-              <el-button class="icon-action" size="mini" aria-label="上传新版本" @click="openUpload(scope.row)">
+              <el-button class="icon-action" size="mini" :disabled="scope.row.isFinalized" aria-label="上传新版本" @click="openUpload(scope.row)">
                 <svg-icon icon-class="upload" />
               </el-button>
             </el-tooltip>
@@ -247,6 +267,10 @@
             </a>
             <strong v-else>未关联</strong>
           </div>
+          <div>
+            <span class="detail-label">定稿状态</span>
+            <strong>{{ detailReport.isFinalized ? `已定稿 · ${detailReport.finalizedBy || '未知用户'}` : '未定稿' }}</strong>
+          </div>
         </div>
 
         <el-table :data="detailVersions" class="detail-version-table" border>
@@ -323,7 +347,7 @@
                     <svg-icon icon-class="refresh" />
                   </el-button>
                 </el-tooltip>
-                <el-tooltip v-if="isLatestVersion(scope.row) && scope.row.auditStatus === 'failed'" content="上传新版本" placement="top">
+                <el-tooltip v-if="!detailReport.isFinalized && isLatestVersion(scope.row) && scope.row.auditStatus === 'failed'" content="上传新版本" placement="top">
                   <el-button class="icon-action" size="mini" aria-label="上传新版本" @click="openUploadFromDetail">
                     <svg-icon icon-class="upload" />
                   </el-button>
@@ -334,6 +358,13 @@
         </el-table>
       </div>
       <div slot="footer" class="dialog-footer">
+        <el-button
+          v-if="detailReport.id && !detailReport.isFinalized"
+          size="mini"
+          :disabled="!canFinalizeDetail"
+          :loading="finalizingReportId === detailReport.id"
+          @click="confirmFinalize(detailReport)"
+        >确认定稿</el-button>
         <el-button size="mini" icon="el-icon-refresh" @click="refreshDetail">刷新</el-button>
         <el-button size="mini" @click="detailDialogVisible = false">关闭</el-button>
       </div>
@@ -377,7 +408,7 @@
 </template>
 
 <script>
-import { downloadUrl, getAudit, getReport, listReports, retryVersionAudit, uploadReportVersion } from '@/api/report-management/report'
+import { downloadUrl, finalizeReport, getAudit, getReport, listReports, retryVersionAudit, uploadReportVersion } from '@/api/report-management/report'
 import AuditProcessDialog from './components/AuditProcessDialog.vue'
 
 export default {
@@ -404,6 +435,7 @@ export default {
       auditDialogVisible: false,
       detailLoading: false,
       retryingVersionId: null,
+      finalizingReportId: null,
       currentReport: {},
       detailReport: {},
       audit: {},
@@ -420,6 +452,10 @@ export default {
     },
     latestDetailVersionNo() {
       return this.detailVersions.reduce((latest, version) => Math.max(latest, version.versionNo || 0), 0)
+    },
+    canFinalizeDetail() {
+      const latest = this.detailVersions.find(version => this.isLatestVersion(version))
+      return Boolean(latest && latest.auditStatus === 'passed' && !this.detailReport.isFinalized)
     },
     auditRows() {
       return (this.audit.resultData && this.audit.resultData.data) || []
@@ -528,6 +564,10 @@ export default {
       return `${this.versionTypeLabel(row.latestVersionType)} · ${actor} · ${row.latestVersionCreateTime || '-'}`
     },
     openUpload(row) {
+      if (row.isFinalized) {
+        this.$modal.msgWarning('报告已定稿，不能继续上传修订版本')
+        return
+      }
       this.currentReport = row
       this.uploadForm = { uploader: '', file: null }
       this.uploadDialogVisible = true
@@ -562,6 +602,10 @@ export default {
     },
     submitUploadRequest() {},
     submitUpload() {
+      if (this.currentReport.isFinalized) {
+        this.$modal.msgWarning('报告已定稿，不能继续上传修订版本')
+        return
+      }
       if (!this.uploadForm.file) {
         this.$modal.msgWarning('请选择DOCX文件')
         return
@@ -579,6 +623,34 @@ export default {
         }
       }).finally(() => {
         this.uploading = false
+      })
+    },
+    canFinalize(row) {
+      return !row.isFinalized && row.latestAuditStatus === 'passed'
+    },
+    finalizeHint(row) {
+      if (row.isFinalized) return '报告已定稿'
+      return this.canFinalize(row) ? '定稿后不能再上传修订版本' : '最新版本审核通过后才能定稿'
+    },
+    confirmFinalize(row) {
+      const reportId = row.id
+      if (!reportId || row.isFinalized) return
+      this.$confirm('定稿后将不能再登记批次版本或上传修订版本，仍可查看和下载。是否确认？', '确认定稿', {
+        confirmButtonText: '确认定稿',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }).then(() => {
+        this.finalizingReportId = reportId
+        return finalizeReport(reportId, { operator: '页面用户' }).then(() => {
+          this.$modal.msgSuccess('报告已确认定稿')
+          const tasks = [this.getList(true)]
+          if (this.detailDialogVisible && this.detailReport.id === reportId) {
+            tasks.push(this.loadDetail(reportId, true))
+          }
+          return Promise.all(tasks)
+        })
+      }).catch(() => {}).finally(() => {
+        this.finalizingReportId = null
       })
     },
     updatePolling() {
@@ -868,6 +940,16 @@ export default {
   white-space: nowrap;
 }
 
+.jira-state {
+  color: #8a6d1d;
+  font-size: 12px;
+}
+
+.jira-state-error {
+  color: #d95040;
+  cursor: help;
+}
+
 .version-badge {
   display: inline-flex;
   align-items: center;
@@ -1055,6 +1137,12 @@ export default {
   height: 15px;
 }
 
+.finalize-button {
+  min-width: 72px;
+  padding-right: 9px;
+  padding-left: 9px;
+}
+
 .compact-actions {
   gap: 2px;
   flex-wrap: nowrap;
@@ -1062,7 +1150,7 @@ export default {
 
 .detail-strip {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 10px;
   margin-bottom: 14px;
 }

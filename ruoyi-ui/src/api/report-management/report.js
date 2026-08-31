@@ -34,6 +34,14 @@ export function uploadReportVersion(reportId, data) {
   })
 }
 
+export function finalizeReport(reportId, data) {
+  return request({
+    url: `/report-management-api/reports/${reportId}/finalize`,
+    method: 'post',
+    data
+  })
+}
+
 export function getAudit(auditId) {
   return request({
     url: `/report-management-api/audits/${auditId}`,
