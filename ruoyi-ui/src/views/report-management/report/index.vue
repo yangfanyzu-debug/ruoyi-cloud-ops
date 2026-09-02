@@ -109,23 +109,55 @@
           </el-tooltip>
         </template>
       </el-table-column>
-      <el-table-column label="审核状态" width="104">
+      <el-table-column label="初审状态" width="104">
         <template slot-scope="scope">
           <button
-            v-if="isAuditRunning(scope.row.latestAuditStatus) && scope.row.latestAuditId"
+            v-if="isAuditRunning(scope.row.initialAuditStatus) && scope.row.initialAuditId"
             type="button"
             class="audit-processing-trigger"
-            @click.stop="openAuditView(scope.row.latestAuditId, scope.row.latestAuditStatus)"
+            @click.stop="openAuditView(scope.row.initialAuditId, scope.row.initialAuditStatus)"
           >
             <span class="audit-pulse" aria-hidden="true"><i /><i /><i /></span>
             审核中
           </button>
-          <el-tag v-else :type="statusType(scope.row.latestAuditStatus)" size="mini" :class="`audit-tag-${scope.row.latestAuditStatus}`">
-            {{ statusLabel(scope.row.latestAuditStatus) }}
+          <el-tag
+            v-else-if="scope.row.initialAuditId"
+            :type="statusType(scope.row.initialAuditStatus)"
+            size="mini"
+            class="audit-status-clickable"
+            :class="`audit-tag-${scope.row.initialAuditStatus}`"
+            @click.stop="openAuditView(scope.row.initialAuditId, scope.row.initialAuditStatus)"
+          >
+            {{ statusLabel(scope.row.initialAuditStatus) }}
           </el-tag>
+          <span v-else class="empty-text">暂无初审</span>
         </template>
       </el-table-column>
-      <el-table-column label="审核总结" min-width="230">
+      <el-table-column label="修订审核状态" width="116">
+        <template slot-scope="scope">
+          <button
+            v-if="isAuditRunning(scope.row.revisionAuditStatus) && scope.row.revisionAuditId"
+            type="button"
+            class="audit-processing-trigger"
+            @click.stop="openAuditView(scope.row.revisionAuditId, scope.row.revisionAuditStatus)"
+          >
+            <span class="audit-pulse" aria-hidden="true"><i /><i /><i /></span>
+            审核中
+          </button>
+          <el-tag
+            v-else-if="scope.row.revisionAuditId"
+            :type="statusType(scope.row.revisionAuditStatus)"
+            size="mini"
+            class="audit-status-clickable"
+            :class="`audit-tag-${scope.row.revisionAuditStatus}`"
+            @click.stop="openAuditView(scope.row.revisionAuditId, scope.row.revisionAuditStatus)"
+          >
+            {{ statusLabel(scope.row.revisionAuditStatus) }}
+          </el-tag>
+          <span v-else class="empty-text">未修订</span>
+        </template>
+      </el-table-column>
+      <el-table-column label="最新审核总结" min-width="230">
         <template slot-scope="scope">
           <div
             class="audit-cell-content audit-cell-clickable"
@@ -539,7 +571,7 @@ export default {
     },
     openAuditView(auditId, status) {
       if (!auditId) return
-      const report = this.reportList.find(item => item.latestAuditId === auditId)
+      const report = this.reportList.find(item => [item.latestAuditId, item.initialAuditId, item.revisionAuditId].includes(auditId))
       const reportId = report ? report.id : this.detailReport.id
       if (!reportId) return
       const route = this.$router.resolve({
@@ -656,7 +688,11 @@ export default {
       })
     },
     updatePolling() {
-      const hasProcessing = this.reportList.some(item => ['pending', 'running'].includes(item.latestAuditStatus))
+      const hasProcessing = this.reportList.some(item => [
+        item.latestAuditStatus,
+        item.initialAuditStatus,
+        item.revisionAuditStatus
+      ].some(status => ['pending', 'running'].includes(status)))
       if (hasProcessing) {
         this.startPolling()
       } else {
@@ -1036,6 +1072,10 @@ export default {
   color: #8a5a00;
   background: #fff8e6;
   border-color: #f2cf85;
+}
+
+.audit-status-clickable {
+  cursor: pointer;
 }
 
 .audit-pulse {

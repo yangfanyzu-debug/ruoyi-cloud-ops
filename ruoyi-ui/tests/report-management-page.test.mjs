@@ -5,7 +5,7 @@ const page = fs.readFileSync('src/views/report-management/report/index.vue', 'ut
 const api = fs.readFileSync('src/api/report-management/report.js', 'utf8')
 const reportTable = page.slice(page.indexOf('<el-table v-loading'), page.indexOf('<pagination'))
 
-for (const heading of ['系统', '报告', '报告月份', 'JIRA任务', '版本', '审核状态', '审核总结', '定稿', '操作']) {
+for (const heading of ['系统', '报告', '报告月份', 'JIRA任务', '版本', '初审状态', '修订审核状态', '最新审核总结', '定稿', '操作']) {
   assert.match(reportTable, new RegExp(`label="${heading}"`), `report list must keep ${heading} as a dedicated column`)
 }
 assert.ok(reportTable.indexOf('label="系统"') < reportTable.indexOf('label="报告"'), 'system must be the first report-list column')
@@ -30,13 +30,17 @@ assert.match(page, /formData\.append\('uploader', this\.currentUploader\)/, 'upl
 assert.match(reportTable, />确认定稿<\/el-button>/, 'report rows must expose the explicit finalization action')
 assert.match(reportTable, /scope\.row\.isFinalized/, 'finalized rows must expose immutable state')
 assert.match(page, /报告已定稿，不能继续上传修订版本/, 'upload entry must guard finalized reports')
-assert.match(page, /isAuditRunning\(scope\.row\.latestAuditStatus\)/, 'only running audits may display the animated auditing state')
+assert.match(reportTable, /isAuditRunning\(scope\.row\.initialAuditStatus\)/, 'initial audits may display the animated auditing state')
+assert.match(reportTable, /isAuditRunning\(scope\.row\.revisionAuditStatus\)/, 'revision audits may display the animated auditing state')
 assert.match(page, /pending: '排队中'/, 'pending audits must be labeled as queued instead of running')
 assert.match(page, /查看排队状态/, 'queued audits must expose their queue state')
 assert.match(page, /current-version-label/, 'detail dialog must identify the current version')
 assert.match(page, /retryAudit\(scope\.row\)/, 'system audit failures must offer retry')
 assert.match(page, /versionAuditSummary/, 'detail versions must display audit summaries or error reasons')
 assert.match(page, /scope\.row\.auditTypeLabel/, 'detail versions must identify initial and revision audits')
+assert.match(reportTable, /scope\.row\.initialAuditStatus/, 'report list must display initial audit status')
+assert.match(reportTable, /scope\.row\.revisionAuditStatus/, 'report list must display revision audit status')
+assert.match(reportTable, />未修订<\/span>/, 'reports without uploaded versions must identify the missing revision')
 assert.match(page, /icon-class="message"/, 'detail version actions must expose audit result as an icon')
 assert.match(page, /\.compact-actions\s*\{[\s\S]*?flex-wrap:\s*nowrap/, 'detail actions must stay on one line')
 assert.match(page, /\.detail-version-table \/deep\/ \.cell\s*\{[\s\S]*?padding-right:\s*10px/, 'detail cells must use balanced padding')
