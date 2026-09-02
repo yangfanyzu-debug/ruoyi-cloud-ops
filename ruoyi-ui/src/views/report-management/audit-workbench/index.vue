@@ -233,7 +233,7 @@ export default {
           const target = this.versions.find(item => item.auditId === auditId) || this.versions[this.versions.length - 1]
           this.selectedVersionId = target ? target.versionId : null
         }
-        return Promise.all([this.loadActiveStreams(), this.loadAgentMessages()])
+        return Promise.all([this.loadActiveStreams(), this.loadAgentMessages(initial)])
       }).then(() => {
         if (this.hasProcessing) this.startPolling()
         else this.stopPolling()
