@@ -348,7 +348,7 @@ export default {
 .header-actions { display:flex; align-items:center; gap:7px; }
 .header-actions /deep/ .el-button + .el-button { margin-left:0; }
 .version-select { width:260px; }
-.workbench-main { display:grid; flex:1 1 auto; grid-template-columns:minmax(620px, 1fr) 430px; min-height:0; overflow:hidden; gap:1px; background:var(--line); }
+.workbench-main { display:grid; flex:1 1 auto; grid-template-columns:minmax(560px, 1fr) clamp(500px, 38vw, 620px); min-height:0; overflow:hidden; gap:1px; background:var(--line); }
 .document-pane { height:100%; min-width:0; min-height:0; overflow:auto; padding:14px 18px 32px; box-sizing:border-box; background:#e9edf2; }
 .document-pane /deep/ .vue-office-docx { min-height:100%; }
 .document-empty { display:grid; height:100%; place-items:center; color:var(--muted); }
@@ -395,6 +395,6 @@ export default {
 .composer-actions { display:flex; align-items:center; justify-content:space-between; margin-top:7px; }
 .composer-actions > span { color:#9aa6b2; font-size:11px; }
 @keyframes typing { 0%,60%,100% { opacity:.35; transform:translateY(0); } 30% { opacity:1; transform:translateY(-3px); } }
-@media (max-width:1280px) { .workbench-main { grid-template-columns:minmax(600px,1fr) 390px; } .report-identity h1 { max-width:520px; } }
+@media (max-width:1280px) { .workbench-main { grid-template-columns:minmax(600px,1fr) 460px; } .report-identity h1 { max-width:520px; } }
 @media (prefers-reduced-motion:reduce) { .typing-line i { animation:none; } }
 </style>
