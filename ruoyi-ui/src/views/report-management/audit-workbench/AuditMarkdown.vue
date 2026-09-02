@@ -18,9 +18,12 @@ const renderInline = value => escapeHtml(value)
 
 const isTableSeparator = line => /^\s*\|?(?:\s*:?-{3,}:?\s*\|)+\s*:?-{3,}:?\s*\|?\s*$/.test(line)
 const tableCells = line => line.trim().replace(/^\||\|$/g, '').split('|').map(cell => cell.trim())
+const visibleAuditContent = source => String(source || '')
+  .replace(/(^|\n)\s*JIRA标题\s*[：:]\s*[^\r\n]*(?=\r?$|\n)/gi, '$1')
 
-function renderMarkdown(source) {
-  const lines = String(source || '').replace(/\r\n?/g, '\n').split('\n')
+function renderMarkdown(source, hideJiraTitle) {
+  const content = hideJiraTitle ? visibleAuditContent(source) : String(source || '')
+  const lines = content.replace(/\r\n?/g, '\n').split('\n')
   const output = []
   let index = 0
   let listType = ''
@@ -96,11 +99,12 @@ function renderMarkdown(source) {
 export default {
   name: 'AuditMarkdown',
   props: {
-    content: { type: String, default: '' }
+    content: { type: String, default: '' },
+    hideJiraTitle: { type: Boolean, default: false }
   },
   computed: {
     renderedHtml() {
-      return renderMarkdown(this.content)
+      return renderMarkdown(this.content, this.hideJiraTitle)
     }
   }
 }

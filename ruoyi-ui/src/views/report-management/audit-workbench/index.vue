@@ -89,7 +89,11 @@
                   <div class="typing-line"><i /><i /><i /></div>
                   <span>{{ version.auditStatus === 'pending' ? '等待后台审核任务' : '正在分析当前报告' }}</span>
                 </div>
-                <audit-markdown v-if="messageText(version)" :content="messageText(version)" />
+                <audit-markdown
+                  v-if="messageText(version)"
+                  :content="messageText(version)"
+                  hide-jira-title
+                />
                 <el-alert
                   v-if="version.errorMessage"
                   :title="version.errorMessage"
