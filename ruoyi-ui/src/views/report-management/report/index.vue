@@ -214,10 +214,12 @@
                 <svg-icon icon-class="download" />
               </el-button>
             </el-tooltip>
-            <el-tooltip content="上传新版本" placement="top">
-              <el-button class="icon-action" size="mini" :disabled="scope.row.isFinalized" aria-label="上传新版本" @click="openUpload(scope.row)">
-                <svg-icon icon-class="upload" />
-              </el-button>
+            <el-tooltip :content="uploadHint(scope.row)" placement="top">
+              <span>
+                <el-button class="icon-action" size="mini" :disabled="!canUploadRevision(scope.row)" aria-label="上传新版本" @click="openUpload(scope.row)">
+                  <svg-icon icon-class="upload" />
+                </el-button>
+              </span>
             </el-tooltip>
           </div>
         </template>
@@ -379,7 +381,7 @@
                     <svg-icon icon-class="refresh" />
                   </el-button>
                 </el-tooltip>
-                <el-tooltip v-if="!detailReport.isFinalized && isLatestVersion(scope.row) && scope.row.auditStatus === 'failed'" content="上传新版本" placement="top">
+                <el-tooltip v-if="canUploadRevision(detailReport) && isLatestVersion(scope.row) && scope.row.auditStatus === 'failed'" content="上传新版本" placement="top">
                   <el-button class="icon-action" size="mini" aria-label="上传新版本" @click="openUploadFromDetail">
                     <svg-icon icon-class="upload" />
                   </el-button>
@@ -488,8 +490,7 @@ export default {
       return this.detailVersions.reduce((latest, version) => Math.max(latest, version.versionNo || 0), 0)
     },
     canFinalizeDetail() {
-      const latest = this.detailVersions.find(version => this.isLatestVersion(version))
-      return Boolean(latest && latest.auditStatus === 'passed' && !this.detailReport.isFinalized)
+      return this.canFinalize(this.detailReport)
     },
     auditRows() {
       return (this.audit.resultData && this.audit.resultData.data) || []
@@ -602,6 +603,10 @@ export default {
         this.$modal.msgWarning('报告已定稿，不能继续上传修订版本')
         return
       }
+      if (!this.canUploadRevision(row)) {
+        this.$modal.msgWarning('初审通过后才能上传修订版本')
+        return
+      }
       this.currentReport = row
       this.uploadForm = { file: null }
       this.uploadDialogVisible = true
@@ -640,6 +645,10 @@ export default {
         this.$modal.msgWarning('报告已定稿，不能继续上传修订版本')
         return
       }
+      if (!this.canUploadRevision(this.currentReport)) {
+        this.$modal.msgWarning('初审通过后才能上传修订版本')
+        return
+      }
       if (!this.uploadForm.file) {
         this.$modal.msgWarning('请选择DOCX文件')
         return
@@ -659,16 +668,56 @@ export default {
         this.uploading = false
       })
     },
+    initialAuditStatusOf(row) {
+      if (row.initialAuditStatus) return row.initialAuditStatus
+      const initialVersions = (row.versions || [])
+        .filter(version => version.versionType === 'initial')
+        .sort((left, right) => (right.versionNo || 0) - (left.versionNo || 0))
+      return initialVersions.length ? initialVersions[0].auditStatus : ''
+    },
+    canUploadRevision(row) {
+      return Boolean(row && !row.isFinalized && this.initialAuditStatusOf(row) === 'passed')
+    },
+    uploadHint(row) {
+      if (row.isFinalized) return '报告已定稿，不能继续上传修订版本'
+      return this.canUploadRevision(row) ? '上传新版本' : '初审通过后才能上传修订版本'
+    },
+    latestVersionOf(row) {
+      if (!row || !row.versions) {
+        return {
+          versionType: row && row.latestVersionType,
+          auditStatus: row && row.latestAuditStatus
+        }
+      }
+      return row.versions.reduce((latest, version) => {
+        if (!latest || (version.versionNo || 0) > (latest.versionNo || 0)) return version
+        return latest
+      }, null)
+    },
     canFinalize(row) {
-      return !row.isFinalized && row.latestAuditStatus === 'passed'
+      const latest = this.latestVersionOf(row)
+      return Boolean(
+        row &&
+        !row.isFinalized &&
+        latest &&
+        latest.versionType === 'uploaded' &&
+        latest.auditStatus === 'passed'
+      )
     },
     finalizeHint(row) {
       if (row.isFinalized) return '报告已定稿'
-      return this.canFinalize(row) ? '定稿后不能再上传修订版本' : '最新版本审核通过后才能定稿'
+      if (this.canFinalize(row)) return '定稿后不能再上传修订版本'
+      const latest = this.latestVersionOf(row)
+      if (!latest || latest.versionType !== 'uploaded') return '上传修订版本并通过AI审核后才能定稿'
+      return '最新修订版本AI审核通过后才能定稿'
     },
     confirmFinalize(row) {
       const reportId = row.id
       if (!reportId || row.isFinalized) return
+      if (!this.canFinalize(row)) {
+        this.$modal.msgWarning(this.finalizeHint(row))
+        return
+      }
       this.$confirm('定稿后将不能再登记批次版本或上传修订版本，仍可查看和下载。是否确认？', '确认定稿', {
         confirmButtonText: '确认定稿',
         cancelButtonText: '取消',
