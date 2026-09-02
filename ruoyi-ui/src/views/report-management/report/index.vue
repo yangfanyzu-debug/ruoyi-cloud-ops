@@ -214,7 +214,7 @@
       </div>
       <el-form label-width="76px" size="small">
         <el-form-item label="上传人">
-          <el-input v-model="uploadForm.uploader" placeholder="默认未知用户" />
+          <el-input :value="currentUploader" disabled />
         </el-form-item>
         <el-form-item label="文件">
           <el-upload
@@ -440,13 +440,15 @@ export default {
       detailReport: {},
       audit: {},
       uploadForm: {
-        uploader: '',
         file: null
       },
       pollTimer: null
     }
   },
   computed: {
+    currentUploader() {
+      return this.$store.getters.name || this.$store.getters.nickName || '未知用户'
+    },
     detailVersions() {
       return this.detailReport.versions || []
     },
@@ -569,7 +571,7 @@ export default {
         return
       }
       this.currentReport = row
-      this.uploadForm = { uploader: '', file: null }
+      this.uploadForm = { file: null }
       this.uploadDialogVisible = true
       this.$nextTick(() => {
         if (this.$refs.upload) this.$refs.upload.clearFiles()
@@ -612,7 +614,7 @@ export default {
       }
       const formData = new FormData()
       formData.append('file', this.uploadForm.file)
-      formData.append('uploader', this.uploadForm.uploader || '未知用户')
+      formData.append('uploader', this.currentUploader)
       this.uploading = true
       uploadReportVersion(this.currentReport.id, formData).then(() => {
         this.$modal.msgSuccess('已上传新版本，等待AI审核')
