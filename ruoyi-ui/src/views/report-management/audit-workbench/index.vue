@@ -15,7 +15,7 @@
       <div class="header-actions">
         <el-select v-model="selectedVersionId" size="small" class="version-select" @change="handleVersionChange">
           <el-option
-            v-for="version in versions"
+            v-for="version in documentVersions"
             :key="version.versionId"
             :label="`v${version.versionNo} · ${version.fileName}`"
             :value="version.versionId"
@@ -61,10 +61,10 @@
           </div>
           <div
             v-for="version in versions"
-            :key="version.versionId"
+            :key="version.auditId || `version-${version.versionId}`"
             class="version-thread"
-            :class="{ active: version.versionId === selectedVersionId }"
-            @click="selectVersion(version.versionId)"
+            :class="{ active: isSelectedAudit(version) }"
+            @click="selectAudit(version)"
           >
             <div class="message message-user">
               <div class="message-avatar"><i :class="version.source === 'batch' ? 'el-icon-document-add' : 'el-icon-upload2'" /></div>
@@ -195,6 +195,7 @@ export default {
       documentLoading: true,
       conversation: {},
       selectedVersionId: null,
+      selectedAuditId: null,
       streamText: {},
       agentMessages: [],
       agentProcessing: false,
@@ -207,8 +208,17 @@ export default {
     versions() {
       return this.conversation.versions || []
     },
+    documentVersions() {
+      const versionsById = new Map()
+      this.versions.forEach(version => versionsById.set(version.versionId, version))
+      return Array.from(versionsById.values())
+    },
     currentVersion() {
-      return this.versions.find(item => item.versionId === this.selectedVersionId) || null
+      if (this.selectedAuditId) {
+        const selectedAudit = this.versions.find(item => item.auditId === this.selectedAuditId)
+        if (selectedAudit) return selectedAudit
+      }
+      return [...this.versions].reverse().find(item => item.versionId === this.selectedVersionId) || null
     },
     documentUrl() {
       return this.selectedVersionId ? previewUrl(this.selectedVersionId) : ''
@@ -225,20 +235,28 @@ export default {
   },
   methods: {
     loadConversation(initial = false) {
+      this.stopPolling()
+      if (this.loading && !initial) return Promise.resolve()
       this.loading = true
-      getAuditConversation(this.$route.params.reportId).then(response => {
+      return getAuditConversation(this.$route.params.reportId).then(response => {
         this.conversation = response || {}
         if (initial) {
           const auditId = Number(this.$route.query.auditId)
           const target = this.versions.find(item => item.auditId === auditId) || this.versions[this.versions.length - 1]
           this.selectedVersionId = target ? target.versionId : null
+          this.selectedAuditId = target ? target.auditId : null
+        } else if (
+          this.selectedVersionId &&
+          (!this.selectedAuditId || !this.versions.some(item => item.auditId === this.selectedAuditId))
+        ) {
+          const target = this.latestAuditForVersion(this.selectedVersionId)
+          this.selectedAuditId = target ? target.auditId : null
         }
         return Promise.all([this.loadActiveStreams(), this.loadAgentMessages(initial)])
-      }).then(() => {
-        if (this.hasProcessing) this.startPolling()
-        else this.stopPolling()
       }).finally(() => {
         this.loading = false
+        if (this.hasProcessing) this.startPolling()
+        else this.stopPolling()
       })
     },
     loadActiveStreams() {
@@ -270,19 +288,36 @@ export default {
     },
     startPolling() {
       if (this.pollTimer) return
-      this.pollTimer = window.setInterval(() => this.loadConversation(), 1800)
+      this.pollTimer = window.setTimeout(() => {
+        this.pollTimer = null
+        this.loadConversation()
+      }, 1800)
     },
     stopPolling() {
       if (!this.pollTimer) return
-      window.clearInterval(this.pollTimer)
+      window.clearTimeout(this.pollTimer)
       this.pollTimer = null
     },
-    selectVersion(versionId) {
-      if (this.selectedVersionId === versionId) return
-      this.selectedVersionId = versionId
-      this.handleVersionChange()
+    latestAuditForVersion(versionId) {
+      return [...this.versions].reverse().find(item => item.versionId === versionId) || null
+    },
+    isSelectedAudit(version) {
+      if (this.selectedAuditId) return version.auditId === this.selectedAuditId
+      return version.versionId === this.selectedVersionId
+    },
+    selectAudit(version) {
+      if (this.isSelectedAudit(version)) return
+      const versionChanged = this.selectedVersionId !== version.versionId
+      this.selectedVersionId = version.versionId
+      this.selectedAuditId = version.auditId || null
+      if (versionChanged) this.reloadVersionContext()
     },
     handleVersionChange() {
+      const target = this.latestAuditForVersion(this.selectedVersionId)
+      this.selectedAuditId = target ? target.auditId : null
+      this.reloadVersionContext()
+    },
+    reloadVersionContext() {
       this.documentLoading = true
       this.agentMessages = []
       this.agentProcessing = false
