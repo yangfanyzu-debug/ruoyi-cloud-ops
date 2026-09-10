@@ -93,7 +93,10 @@
             </a>
           </el-tooltip>
           <el-tooltip v-else-if="scope.row.jiraStatus === 'error'" :content="scope.row.jiraError || 'JIRA创建失败'" placement="top">
-            <span class="jira-state jira-state-error">创建失败</span>
+            <span class="jira-state jira-state-error">
+              创建失败
+              <el-button v-if="scope.row.initialAuditStatus === 'passed'" type="text" size="mini" :loading="retryingJiraId === scope.row.id" @click.stop="retryJira(scope.row)">重新创建</el-button>
+            </span>
           </el-tooltip>
           <span v-else-if="['pending', 'creating'].includes(scope.row.jiraStatus)" class="jira-state">创建中</span>
           <span v-else class="empty-text">待初审通过</span>
@@ -442,7 +445,7 @@
 </template>
 
 <script>
-import { downloadUrl, finalizeReport, getAudit, getReport, listReports, retryVersionAudit, uploadReportVersion } from '@/api/report-management/report'
+import { downloadUrl, finalizeReport, getAudit, getReport, listReports, retryJiraCreation, retryVersionAudit, uploadReportVersion } from '@/api/report-management/report'
 import AuditProcessDialog from './components/AuditProcessDialog.vue'
 
 export default {
@@ -469,6 +472,7 @@ export default {
       auditDialogVisible: false,
       detailLoading: false,
       retryingVersionId: null,
+      retryingJiraId: null,
       finalizingReportId: null,
       currentReport: {},
       detailReport: {},
@@ -511,6 +515,17 @@ export default {
     this.stopPolling()
   },
   methods: {
+    async retryJira(row) {
+      if (this.retryingJiraId !== null) return
+      this.retryingJiraId = row.id
+      try {
+        await retryJiraCreation(row.id)
+        this.$modal.msgSuccess('已提交JIRA创建任务')
+        await this.getList(true)
+      } finally {
+        this.retryingJiraId = null
+      }
+    },
     getList(silent = false) {
       if (!silent) this.loading = true
       return listReports(this.queryParams).then(response => {
@@ -741,7 +756,7 @@ export default {
         item.latestAuditStatus,
         item.initialAuditStatus,
         item.revisionAuditStatus
-      ].some(status => ['pending', 'running'].includes(status)))
+      ].some(status => ['pending', 'running'].includes(status)) || ['pending', 'creating'].includes(item.jiraStatus))
       if (hasProcessing) {
         this.startPolling()
       } else {

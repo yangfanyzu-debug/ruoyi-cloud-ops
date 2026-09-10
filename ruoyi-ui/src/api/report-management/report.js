@@ -42,6 +42,13 @@ export function finalizeReport(reportId, data) {
   })
 }
 
+export function retryJiraCreation(reportId) {
+  return request({
+    url: `/report-management-api/reports/${reportId}/jira/retry`,
+    method: 'post'
+  })
+}
+
 export function getAudit(auditId) {
   return request({
     url: `/report-management-api/audits/${auditId}`,
