@@ -756,7 +756,9 @@ export default {
         item.latestAuditStatus,
         item.initialAuditStatus,
         item.revisionAuditStatus
-      ].some(status => ['pending', 'running'].includes(status)) || ['pending', 'creating'].includes(item.jiraStatus))
+      ].some(status => ['pending', 'running'].includes(status)) || ['pending', 'creating'].includes(item.jiraStatus) || (
+        item.jiraStatus === 'error' && !item.jiraId && Number.isInteger(item.jiraAttempts) && item.jiraAttempts < 3
+      ))
       if (hasProcessing) {
         this.startPolling()
       } else {

@@ -53,4 +53,22 @@ assert.match(api, /versions\/\$\{versionId\}\/retry/)
 assert.match(api, /export function finalizeReport/)
 assert.match(api, /reports\/\$\{reportId\}\/finalize/)
 
+const pollingBody = page.match(/updatePolling\(\) \{([\s\S]*?)\n    \},/)[1]
+const updatePolling = new Function(pollingBody)
+for (const [row, expected] of [
+  [{ jiraStatus: 'error', jiraAttempts: 1 }, true],
+  [{ jiraStatus: 'error', jiraAttempts: 2 }, true],
+  [{ jiraStatus: 'error', jiraAttempts: 3 }, false],
+  [{ jiraStatus: 'created', jiraAttempts: 1 }, false],
+  [{ jiraStatus: 'pending' }, true],
+  [{ jiraStatus: 'creating' }, true],
+  [{ jiraStatus: 'error', jiraAttempts: 1, jiraId: 'TEST-1' }, false],
+  [{ jiraStatus: 'error' }, false],
+  [{ jiraStatus: 'error', jiraAttempts: 3, initialAuditStatus: 'running' }, true]
+]) {
+  let polling
+  updatePolling.call({ reportList: [row], startPolling() { polling = true }, stopPolling() { polling = false } })
+  assert.equal(polling, expected, JSON.stringify(row))
+}
+
 console.log('report-management-page test passed')
