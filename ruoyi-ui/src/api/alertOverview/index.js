@@ -21,3 +21,12 @@ export function getAlertDetails(params) {
     params
   }).then(response => response.data)
 }
+
+export function getMonthlyReportStats(params) {
+  return direct({
+    url: 'monthly-report-api/osenv/node/resource/cap/stat',
+    method: 'get',
+    timeout: 30000,
+    params
+  }).then(response => response.data)
+}

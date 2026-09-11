@@ -1,0 +1,74 @@
+import assert from 'node:assert/strict'
+import fs from 'node:fs'
+
+const page = fs.readFileSync('src/views/report-management/report/index.vue', 'utf8')
+const api = fs.readFileSync('src/api/report-management/report.js', 'utf8')
+const reportTable = page.slice(page.indexOf('<el-table v-loading'), page.indexOf('<pagination'))
+
+for (const heading of ['系统', '报告', '报告月份', 'JIRA任务', '版本', '初审状态', '修订审核状态', '最新审核总结', '定稿', '操作']) {
+  assert.match(reportTable, new RegExp(`label="${heading}"`), `report list must keep ${heading} as a dedicated column`)
+}
+assert.ok(reportTable.indexOf('label="系统"') < reportTable.indexOf('label="报告"'), 'system must be the first report-list column')
+assert.match(reportTable, /class="system-cell"[\s\S]*?scope\.row\.systemId/, 'system code must render in its own table cell')
+assert.match(reportTable, /class="icon-action primary-action"[\s\S]*?icon-class="documentation"/, 'report actions must expose details as an icon')
+assert.match(reportTable, /class="icon-action"[\s\S]*?icon-class="eye-open"/, 'report actions must expose preview as an icon')
+assert.match(reportTable, /class="icon-action"[\s\S]*?icon-class="download"/, 'report actions must expose download as an icon')
+assert.match(reportTable, /class="icon-action"[\s\S]*?icon-class="upload"/, 'report actions must expose upload as an icon')
+assert.match(page, /label="操作" width="154" align="right">/, 'detail operation column must stay compact')
+assert.match(page, /label="报告文件" min-width="340"/, 'detail file information must receive enough width')
+assert.match(page, /label="审核结果" min-width="360"/, 'detail audit result must receive enough width')
+assert.doesNotMatch(page, /el-icon-time[\s\S]*?scope\.row\.createTime/, 'report list should not show creation time as primary metadata')
+assert.match(page, /quickAuditStatus/, 'report list must expose compact quick filters')
+for (const status of ['processing', 'failed', 'error']) assert.match(page, new RegExp(`label="${status}"`))
+assert.match(page, /http:\/\/jira\/browse\//, 'JIRA task must link to the configured JIRA base URL')
+assert.match(page, /-webkit-line-clamp:\s*2/, 'audit summaries must use a stable two-line layout')
+assert.match(page, /audit-cell-clickable/, 'audit summary area must open the audit workbench')
+assert.match(page, /上传新版本/, 'failed reports must offer a clearly named revision action')
+assert.match(page, /<el-input :value="currentUploader" disabled \/>/, 'uploader must be read-only')
+assert.match(page, /this\.\$store\.getters\.name/, 'uploader must come from the signed-in user')
+assert.match(page, /formData\.append\('uploader', this\.currentUploader\)/, 'upload must submit the signed-in user')
+assert.match(reportTable, />确认定稿<\/el-button>/, 'report rows must expose the explicit finalization action')
+assert.match(reportTable, /scope\.row\.isFinalized/, 'finalized rows must expose immutable state')
+assert.match(page, /报告已定稿，不能继续上传修订版本/, 'upload entry must guard finalized reports')
+assert.match(reportTable, /:disabled="!canUploadRevision\(scope\.row\)"/, 'initial audit must pass before revision upload is enabled')
+assert.match(page, /初审通过后才能上传修订版本/, 'revision upload must explain the initial-audit gate')
+assert.match(page, /latest\.versionType === 'uploaded'[\s\S]*?latest\.auditStatus === 'passed'/, 'finalization must require a passed uploaded revision')
+assert.match(page, /上传修订版本并通过AI审核后才能定稿/, 'finalization must explain the required revision workflow')
+assert.match(reportTable, /isAuditRunning\(scope\.row\.initialAuditStatus\)/, 'initial audits may display the animated auditing state')
+assert.match(reportTable, /isAuditRunning\(scope\.row\.revisionAuditStatus\)/, 'revision audits may display the animated auditing state')
+assert.match(page, /pending: '排队中'/, 'pending audits must be labeled as queued instead of running')
+assert.match(page, /查看排队状态/, 'queued audits must expose their queue state')
+assert.match(page, /current-version-label/, 'detail dialog must identify the current version')
+assert.match(page, /retryAudit\(scope\.row\)/, 'system audit failures must offer retry')
+assert.match(page, /versionAuditSummary/, 'detail versions must display audit summaries or error reasons')
+assert.match(page, /scope\.row\.auditTypeLabel/, 'detail versions must identify initial and revision audits')
+assert.match(reportTable, /scope\.row\.initialAuditStatus/, 'report list must display initial audit status')
+assert.match(reportTable, /scope\.row\.revisionAuditStatus/, 'report list must display revision audit status')
+assert.match(reportTable, />未修订<\/span>/, 'reports without uploaded versions must identify the missing revision')
+assert.match(page, /icon-class="message"/, 'detail version actions must expose audit result as an icon')
+assert.match(page, /\.compact-actions\s*\{[\s\S]*?flex-wrap:\s*nowrap/, 'detail actions must stay on one line')
+assert.match(page, /\.detail-version-table \/deep\/ \.cell\s*\{[\s\S]*?padding-right:\s*10px/, 'detail cells must use balanced padding')
+assert.match(api, /export function retryVersionAudit/)
+assert.match(api, /versions\/\$\{versionId\}\/retry/)
+assert.match(api, /export function finalizeReport/)
+assert.match(api, /reports\/\$\{reportId\}\/finalize/)
+
+const pollingBody = page.match(/updatePolling\(\) \{([\s\S]*?)\n    \},/)[1]
+const updatePolling = new Function(pollingBody)
+for (const [row, expected] of [
+  [{ jiraStatus: 'error', jiraAttempts: 1 }, true],
+  [{ jiraStatus: 'error', jiraAttempts: 2 }, true],
+  [{ jiraStatus: 'error', jiraAttempts: 3 }, false],
+  [{ jiraStatus: 'created', jiraAttempts: 1 }, false],
+  [{ jiraStatus: 'pending' }, true],
+  [{ jiraStatus: 'creating' }, true],
+  [{ jiraStatus: 'error', jiraAttempts: 1, jiraId: 'TEST-1' }, false],
+  [{ jiraStatus: 'error' }, false],
+  [{ jiraStatus: 'error', jiraAttempts: 3, initialAuditStatus: 'running' }, true]
+]) {
+  let polling
+  updatePolling.call({ reportList: [row], startPolling() { polling = true }, stopPolling() { polling = false } })
+  assert.equal(polling, expected, JSON.stringify(row))
+}
+
+console.log('report-management-page test passed')

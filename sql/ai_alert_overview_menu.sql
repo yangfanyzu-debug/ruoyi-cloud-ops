@@ -49,3 +49,35 @@ SELECT r.role_id, m.menu_id
 FROM sys_role r
 JOIN sys_menu m ON m.menu_id IN (@alert_analysis_parent_id, @ai_alert_overview_menu_id)
 WHERE r.status = '0';
+
+SET @monthly_report_menu_id = (
+  SELECT menu_id FROM sys_menu
+  WHERE parent_id = @alert_analysis_parent_id AND path = 'monthly-report'
+  LIMIT 1
+);
+
+INSERT INTO sys_menu (
+  menu_name, parent_id, order_num, path, component, query, route_name,
+  is_frame, is_cache, menu_type, visible, status, perms, icon,
+  create_by, create_time, update_by, update_time, remark
+)
+SELECT
+  '月度报告统计', @alert_analysis_parent_id, 2, 'monthly-report', 'alertAnalysis/monthlyReport/index', '', 'MonthlyReport',
+  1, 0, 'C', '0', '0', 'alert:monthly-report:list', 'date-range',
+  'admin', SYSDATE(), '', NULL, '月度报告覆盖统计'
+WHERE NOT EXISTS (
+  SELECT 1 FROM sys_menu
+  WHERE parent_id = @alert_analysis_parent_id AND path = 'monthly-report'
+);
+
+SET @monthly_report_menu_id = (
+  SELECT menu_id FROM sys_menu
+  WHERE parent_id = @alert_analysis_parent_id AND path = 'monthly-report'
+  LIMIT 1
+);
+
+INSERT IGNORE INTO sys_role_menu (role_id, menu_id)
+SELECT r.role_id, m.menu_id
+FROM sys_role r
+JOIN sys_menu m ON m.menu_id IN (@monthly_report_menu_id)
+WHERE r.status = '0';
